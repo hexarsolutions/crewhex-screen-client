@@ -38,6 +38,46 @@ public API using the documented protocol in
 
 ## Install (Raspberry Pi)
 
+### For tenants — the easy way (no experience needed)
+
+*You need: a Raspberry Pi 3/4/5, a power supply, a microSD card (8GB+), a TV
+or monitor with HDMI, and internet (Wi-Fi or ethernet cable).*
+
+1. **Put the CrewHex software on a memory card** — on any computer,
+   install the free "Raspberry Pi Imager" from
+   [raspberrypi.com/software](https://www.raspberrypi.com/software/).
+   Insert the microSD card, open the Imager, choose
+   *Raspberry Pi OS (32-bit)*, choose your SD card, then click **Next →
+   Edit Settings** and set:
+   - hostname: `crewhex-screen`
+   - enable SSH (optional, for support)
+   - your Wi-Fi network name + password (if not using a cable)
+2. **Write the card** (takes ~10 minutes), put it in the Pi, connect the
+   Pi to the TV with HDMI, and plug in the power. It boots by itself in
+   about a minute.
+3. **One command** — on the Pi's first boot, open a terminal
+   (black icon top-left) and type this single line:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/hexarsolutions/crewhex-screen-client/main/install.sh | sudo bash
+   ```
+
+   Then walk away — it installs everything and reboots into the
+   fullscreen CrewHex screen on its own (5–10 minutes).
+4. **Link it to your business** — the TV now shows a 6-digit PIN.
+   On any computer, sign in to CrewHex, open **Screens → Add screen**,
+   type your business login name (the same one you use to sign in,
+   e.g. `hexarsolutions`) plus the 6-digit PIN, and give the screen a
+   name like `Workshop TV`. Done — the screen starts showing your
+   published pages straight away.
+
+*If anything goes wrong:* the screen tells you what it's doing. If it says
+"Reconnecting…", check the network cable/Wi-Fi. Full troubleshooting guide
+is below. If you're stuck, contact CrewHex support — the screen shows its
+status at all times.
+
+### Command-line install (for the tech-minded)
+
 On a fresh Raspberry Pi OS (Bookworm/Bullseye) with internet access:
 
 ```bash
@@ -72,6 +112,26 @@ Logs:
 
 ```bash
 journalctl -u crewhex-screen -u crewhex-kiosk -f
+```
+
+## Troubleshooting (plain English)
+
+| What the screen shows | What it means | What to do |
+|---|---|---|
+| Big 6-digit PIN | Waiting to be linked to your business | Enter it in CrewHex → Screens → Add screen |
+| PIN disappeared, pages showing | Paired and running normally | Nothing — enjoy it |
+| "Reconnecting…" | Can't reach the internet | Check the ethernet cable / Wi-Fi password; it recovers on its own |
+| "Outside operating hours" | Your business hours settings | Change hours in CrewHex (Screens settings) |
+| Black screen / no signal | TV input or power | Check HDMI is in the right input, power LED on the Pi is lit |
+| PIN stuck for a long time | It has never been linked | The PIN refreshes every ~15 minutes; pair from CrewHex |
+
+To get the PIN back on a screen that was already linked (e.g. moving it to
+a different site), on the Pi's terminal run:
+
+```bash
+sudo systemctl stop crewhex-screen
+sudo rm /var/lib/crewhex-screen/device.json
+sudo systemctl start crewhex-screen
 ```
 
 ## Uninstall / re-pair
