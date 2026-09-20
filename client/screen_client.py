@@ -81,9 +81,26 @@ def api_request(method, path, body=None, token=None, timeout=8):
         return json.loads(resp.read().decode())
 
 
+def register_pin():
+    """Register this boot's PIN so a tenant can claim it."""
+    try:
+        api_request("POST", "/api/v1/hub-device/register", {"pin": STATE.pairing_code})
+        STATE.last_ok = time.time()
+        STATE.last_error = None
+        return True
+    except Exception as e:
+        STATE.last_error = str(e)[:120]
+        return False
+
+
 def try_pair():
     """Poll the pairing endpoint until the tenant links this screen."""
     code = STATE.pairing_code
+    if not getattr(STATE, "pin_registered", False):
+        if not register_pin():
+            return
+        STATE.pin_registered = True
+    
     try:
         r = api_request("GET", "/api/v1/hub-device/pair/" + code)
         STATE.last_ok = time.time()
