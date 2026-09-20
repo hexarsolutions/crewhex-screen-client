@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CrewHex Screen</title>
+<style>
+  :root { --orange:#E9653A; --ink:#0f1317; --paper:#f3f5f7; --line:#e9ecf0; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:var(--ink); color:var(--paper);
+              font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+              overflow:hidden; cursor:none; }
+  #app { height:100%; display:flex; flex-direction:column; }
+
+  /* ---------- pairing ---------- */
+  .pair { margin:auto; text-align:center; max-width:900px; padding:32px; }
+  .pair h1 { font-size:min(4vw,34px); font-weight:600; letter-spacing:.02em; }
+  .pair .brand { color:var(--orange); font-weight:700; }
+  .code { font-size:min(13vw,140px); font-weight:800; letter-spacing:.08em;
+          color:#fff; margin:32px 0 8px; font-variant-numeric:tabular-nums; }
+  .pair p  { font-size:min(2.4vw,22px); color:#b9c2cc; line-height:1.5; }
+  .pair .api { margin-top:24px; font-size:min(1.8vw,16px); color:#6f7a85; }
+  .pair .api b { color:#b9c2cc; font-weight:600; }
+
+  /* ---------- content ---------- */
+  .top { display:flex; align-items:center; gap:14px; padding:18px 28px;
+         border-bottom:1px solid #1c232b; }
+  .mark { width:34px; height:34px; flex:none; }
+  .top .name { font-size:20px; font-weight:700; }
+  .top .page { margin-left:auto; font-size:15px; color:#8b95a1; }
+  .stage { flex:1; position:relative; }
+  .slide { position:absolute; inset:0; display:flex; flex-direction:column;
+           justify-content:center; padding:6vh 8vw; gap:24px; opacity:0;
+           transition:opacity .5s; }
+  .slide.on { opacity:1; }
+  .slide h2 { font-size:min(5vw,56px); font-weight:700; color:#fff; }
+  .slide .msg { font-size:min(3.2vw,34px); line-height:1.45; color:#d6dde4;
+                white-space:pre-wrap; }
+  .slide .foot { font-size:min(1.8vw,18px); color:#6f7a85; margin-top:8px; }
+  .list { display:flex; flex-direction:column; gap:14px; max-width:1100px; }
+  .row { background:#141b22; border:1px solid #1c232b; border-radius:14px;
+         padding:18px 24px; display:flex; align-items:center; gap:18px; }
+  .row .t { font-size:min(2.4vw,26px); font-weight:600; }
+  .row .s { margin-left:auto; font-size:min(1.8vw,19px); color:#8b95a1; }
+  .clock { font-size:15px; color:#8b95a1; font-variant-numeric:tabular-nums; }
+
+  /* ---------- after hours / offline ---------- */
+  .veil { position:fixed; inset:0; background:var(--ink); display:none;
+          flex-direction:column; justify-content:center; align-items:center;
+          text-align:center; padding:40px; z-index:10; }
+  .veil.on { display:flex; }
+  .veil h1 { font-size:min(5vw,54px); color:#fff; font-weight:700; }
+  .veil p  { margin-top:18px; font-size:min(2.6vw,26px); color:#b9c2cc;
+             max-width:760px; line-height:1.5; }
+  .veil .dot { width:12px; height:12px; border-radius:50%; background:var(--orange);
+               margin-bottom:26px; animation:pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity:.25; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top" id="top" style="display:none">
+    <svg class="mark" viewBox="0 0 40 40"><path fill="#E9653A" d="M37 20 28.5 34.72 11.5 34.72 3 20 11.5 5.28 28.5 5.28Z"/><path fill="#fff" d="M20 12.6 29.5 22.1 25.7 25.9 20 20.2 14.3 25.9 10.5 22.1Z"/></svg>
+    <span class="name" id="dispName">CrewHex Screen</span>
+    <span class="clock" id="clock"></span>
+    <span class="page" id="pageIdx"></span>
+  </div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<div class="veil on" id="pairVeil">
+  <div class="pair">
+    <h1><span class="brand">CrewHex</span> &mdash; link this screen</h1>
+    <div class="code" id="pairCode">&mdash;&mdash;&ndash;&mdash;</div>
+    <p>On any computer, sign in to your CrewHex tenant app,<br>
+       open <b>Screens</b>, and enter this code to link this display.</p>
+    <p class="api">This screen will connect to <b id="pairApi">...</b></p>
+  </div>
+</div>
+
+<div class="veil" id="afterVeil">
+  <h1 id="afterTitle">Outside operating hours</h1>
+  <p id="afterMsg">This display is outside operating hours.</p>
+</div>
+
+<div class="veil" id="offVeil">
+  <div class="dot"></div>
+  <h1>Reconnecting&hellip;</h1>
+  <p id="offMsg">Trying to reach the CrewHex server.</p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let slides = [], idx = 0, timer = null, lastVersion = null, lastBeat = 0;
+
+async function j(url) {
+  const r = await fetch(url, {cache:'no-store'});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+/* ---- pairing ---- */
+function showPairing(st) {
+  $('top').style.display = 'none';
+  $('stage').innerHTML = '';
+  $('pairVeil').classList.add('on');
+  $('afterVeil').classList.remove('on');
+  $('offVeil').classList.remove('on');
+  $('pairCode').textContent = st.pairing_code || '------';
+  $('pairApi').textContent = st.api_base || '';
+}
+
+/* ---- content ---- */
+function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
+
+function buildSlides(content) {
+  const stage = $('stage'); stage.innerHTML = ''; slides = [];
+  const pages = (content && content.pages || []).filter(p => p.enabled !== false);
+  if (!pages.length) {
+    stage.innerHTML = '<div class="slide on"><h2>No pages published yet</h2>' +
+      '<div class="msg">Publish pages from the CrewHex tenant app.</div></div>';
+    return;
+  }
+  pages.forEach((p, i) => {
+    const s = document.createElement('div');
+    s.className = 'slide' + (i === 0 ? ' on' : '');
+    const cfg = p.published_config || p.config || {};
+    let inner = '<h2>' + esc(p.title) + '</h2>';
+    const msg = cfg.message || cfg.body || '';
+    if (msg) inner += '<div class="msg">' + esc(msg) + '</div>';
+    const items = cfg.items || cfg.rows || [];
+    if (Array.isArray(items) && items.length) {
+      inner += '<div class="list">' + items.map(it =>
+        '<div class="row"><span class="t">' + esc(it.title || it.name || '') +
+        '</span><span class="s">' + esc(it.subtitle || it.detail || '') +
+        '</span></div>').join('') + '</div>';
+    }
+    inner += '<div class="foot">' + esc(p.title) + ' &middot; CrewHex</div>';
+    s.innerHTML = inner;
+    stage.appendChild(s);
+    slides.push({el: s, secs: Math.max(5, Number(p.rotation_seconds) || 30)});
+  });
+}
+
+function show(i) {
+  slides.forEach((s, k) => s.el.classList.toggle('on', k === i));
+  $('pageIdx').textContent = slides.length > 1 ? ((i + 1) + ' / ' + slides.length) : '';
+}
+
+function rotate() {
+  clearInterval(timer);
+  if (slides.length < 2) return;
+  timer = setInterval(() => { idx = (idx + 1) % slides.length; show(idx); }, slides[idx].secs * 1000);
+}
+
+/* ---- after hours (client-side from display config) ---- */
+function afterHours(content) {
+  const d = content && (content.display || {});
+  if (!d.timezone) return false;
+  let now;
+  try { now = new Date(new Date().toLocaleString('en-US', {timeZone: d.timezone})); }
+  catch { return false; }
+  const days = d.operating_days || [1,2,3,4,5];
+  if (!days.includes(now.getDay())) return true;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + (m || 0); };
+  if (mins < toMin(d.open_time) || mins >= toMin(d.close_time)) return true;
+  const hol = d.holiday_dates || [];
+  const iso = now.toISOString().slice(0, 10);
+  return hol.includes(iso);
+}
+
+function showAfterHours(content) {
+  const d = (content && content.display) || {};
+  $('afterTitle').textContent = 'Outside operating hours';
+  $('afterMsg').textContent = d.after_hours_message || 'This display is outside operating hours.';
+  $('afterVeil').classList.add('on');
+  $('offVeil').classList.remove('on');
+  $('pairVeil').classList.remove('on');
+  if (d.after_hours_mode === 'blank') $('afterMsg').textContent = '';
+}
+
+/* ---- clock ---- */
+let tz = null;
+setInterval(() => {
+  if (!tz) return;
+  try { $('clock').textContent = new Date().toLocaleString('en-AU',
+    {timeZone: tz, weekday:'short', hour:'2-digit', minute:'2-digit'}); } catch {}
+}, 1000);
+
+/* ---- main loop ---- */
+async function tick() {
+  let st;
+  try { st = await j('/api/status'); } catch { return; }
+  if (st.mode === 'pairing') { stopSlides(); return showPairing(st); }
+
+  let content;
+  try { content = await j('/api/content'); } catch { content = null; }
+
+  const stale = !st.last_ok || (Date.now() / 1000 - st.last_ok > 90);
+  if (stale) {                       // API unreachable from the Pi
+    stopSlides();
+    $('top').style.display = 'none';
+    $('pairVeil').classList.remove('on');
+    $('afterVeil').classList.remove('on');
+    $('offMsg').textContent = 'Cannot reach ' + (st.api_base || 'the CrewHex server') + '.';
+    $('offVeil').classList.add('on');
+    return;
+  }
+  $('offVeil').classList.remove('on');
+  $('pairVeil').classList.remove('on');
+
+  const pages = (content && content.pages || []);
+  if (!pages.length) { stopSlides(); return; }
+
+  if (afterHours(content) && (content.display?.after_hours_mode !== 'content')) {
+    stopSlides();
+    return showAfterHours(content);
+  }
+  $('afterVeil').classList.remove('on');
+
+  if (content.version !== lastVersion) {
+    lastVersion = content.version;
+    tz = content.display?.timezone || null;
+    $('dispName').textContent = (content.display?.name) || st.display_name || 'CrewHex Screen';
+    buildSlides(content);
+    idx = 0; show(0); rotate();
+  }
+  $('top').style.display = 'flex';
+}
+function stopSlides() { clearInterval(timer); timer = null; slides = []; $('stage').innerHTML = ''; $('pageIdx').textContent = ''; }
+
+tick();
+setInterval(tick, 5000);
+
+/* keep the browser from ever showing a scroll/idle prompt */
+document.addEventListener('contextmenu', e => e.preventDefault());
+setInterval(() => { if (document.fullscreenElement === null) document.documentElement.requestFullscreen().catch(()=>{}); }, 10000);
+document.documentElement.requestFullscreen().catch(()=>{});
+</script>
+</body>
+</html>
