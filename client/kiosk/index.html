@@ -73,7 +73,8 @@
     <h1><span class="brand">CrewHex</span> &mdash; link this screen</h1>
     <div class="code" id="pairCode">&mdash;&mdash;&ndash;&mdash;</div>
     <p>On any computer, sign in to your CrewHex tenant app,<br>
-       open <b>Screens</b>, and enter this code to link this display.</p>
+       open <b>Screens</b> &rarr; <b>Add screen</b>, and enter<br>
+       your business login name plus this 6-digit PIN.</p>
     <p class="api">This screen will connect to <b id="pairApi">...</b></p>
   </div>
 </div>
@@ -106,7 +107,7 @@ function showPairing(st) {
   $('pairVeil').classList.add('on');
   $('afterVeil').classList.remove('on');
   $('offVeil').classList.remove('on');
-  $('pairCode').textContent = st.pairing_code || '------';
+  $('pairCode').textContent = (st.pairing_pin || '------').replace(/^(\d{3})(\d{3})$/, '$1 $2');
   $('pairApi').textContent = st.api_base || '';
 }
 

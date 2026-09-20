@@ -42,8 +42,10 @@ jobs:
           python3 - <<'PY'
           import json
           s = json.load(open('/tmp/smoke/status.json'))
-          assert s['mode'] == 'pairing' and s['pairing_code'], s
-          print('pairing code served:', s['pairing_code'])
+          assert s['mode'] == 'pairing' and s['pairing_pin'], s
+          import re
+          assert re.fullmatch(r'[2-9]{6}', s['pairing_pin']), s
+          print('pairing PIN served:', s['pairing_pin'])
           PY
           wait || true
 

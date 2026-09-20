@@ -29,7 +29,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "kiosk"
 POLL_CONTENT = 20          # seconds between content polls
 POLL_PAIRING = 3           # seconds between pairing-status polls
 HEARTBEAT = 60             # seconds between heartbeats
-CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
+# Pairing PIN: 6 digits, no 0/1. Tenant admin enters their business login
+# name (e.g. hexarsolutions) + this PIN in CrewHex > Screens.
+PIN_LENGTH = 6
+PIN_DIGITS = "23456789"
 
 
 def load_json(path, default):
@@ -56,7 +59,7 @@ class State:
         st = load_json(STATE_PATH, {})
         self.device_token = st.get("device_token")
         self.device_id = st.get("device_id")
-        self.pairing_code = None
+        self.pairing_code = None      # 6-digit pairing PIN (str when pairing)
         self.content = None          # last successful content payload
         self.content_version = None
         self.last_ok = None          # epoch of last successful API contact
@@ -111,10 +114,7 @@ def try_pair():
 
 
 def new_code():
-    return "-".join(
-        "".join(secrets.choice(CODE_ALPHABET) for _ in range(3))
-        for _ in range(2)
-    )
+    return "".join(secrets.choice(PIN_DIGITS) for _ in range(PIN_LENGTH))
 
 
 def poll_content():
@@ -187,7 +187,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             snap = {
                 "mode": "content" if STATE.device_token else "pairing",
                 "api_base": STATE.api_base,
-                "pairing_code": STATE.pairing_code,
+                "pairing_pin": STATE.pairing_code,
                 "display_name": STATE.display_name,
                 "version": STATE.content_version,
                 "content": STATE.content,

@@ -26,10 +26,12 @@ public API using the documented protocol in
 ```
 
 1. **Boot** — the client starts and, with no stored token, shows a
-   fullscreen pairing code (`XXX-XXX`).
-2. **Link** — a tenant admin opens **Screens** in the CrewHex tenant app
-   and enters the code. The server binds the display to that tenant and
-   issues a device token.
+   fullscreen 6-digit pairing PIN.
+2. **Link** — a tenant admin opens **Screens → Add screen** in the CrewHex
+   tenant app and enters their **business login name** (the same identifier
+   used to sign in, e.g. `hexarsolutions`) plus the 6-digit PIN shown on
+   the screen. The server binds the display to that tenant and issues a
+   device token.
 3. **Run** — the client stores the token, polls for published pages,
    rotates them fullscreen, handles after-hours mode, and heartbeats so
    the tenant can see the screen is online.

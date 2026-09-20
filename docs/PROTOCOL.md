@@ -9,11 +9,13 @@ This document is the contract the web-app (Phase 2) build implements.
 A screen that has no stored device token polls:
 
 ```
-GET /api/v1/hub-device/pair/{code}
+GET /api/v1/hub-device/pair/{pin}
 ```
 
-`code` is what the screen displays, format `XXX-XXX` from the alphabet
-`A-Z` minus `I,O` plus `2-9` minus `0,1` (e.g. `K7T-QM4`).
+`pin` is a 6-digit code shown on the screen, digits `2-9` only
+(e.g. `482917`). To pair, a tenant admin opens **Screens → Add screen**
+in the CrewHex web app and enters their **business login name** (the same
+identifier used to sign in, e.g. `hexarsolutions`) plus this PIN.
 
 Responses:
 
@@ -38,10 +40,12 @@ returning this for a grace window, the client stores the token idempotently):
 }
 ```
 
-Server-side expectations: pairing codes are single-screen, expire after
-~15 minutes, and a tenant admin creates them by entering the code shown on
-the screen into the web app's **Screens** section (which binds the display
-to the admin's tenant and issues the `hub_device_tokens` row).
+Server-side expectations: pairing PINs are single-screen, single-use, expire
+after ~15 minutes, and invalidate after 5 failed entry attempts. A tenant
+admin creates the binding by entering the business login name + the PIN
+shown on the screen into the web app's **Screens** section (which verifies
+the admin's session, binds the display to that tenant, and issues the
+`hub_device_tokens` row). The PIN must be stored hashed, never plaintext.
 
 ## 2. Content
 
