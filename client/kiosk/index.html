@@ -64,6 +64,8 @@
   #linkDot.amber { background:#f5a623; box-shadow:0 0 10px #f5a623aa; }
   #linkDot.red   { background:#e74c3c; box-shadow:0 0 10px #e74c3caa;
                    animation:pulse 1.6s infinite; }
+  #linkLabel { position:fixed; top:13px; right:44px; z-index:30; font-size:14px;
+               color:#b9c2cc; letter-spacing:.02em; }
 
   /* ---------- wifi setup ---------- */
   .setup { margin:auto; text-align:left; max-width:860px; width:92%; padding:32px; }
@@ -86,7 +88,7 @@
 </style>
 </head>
 <body>
-<div id="linkDot"></div>
+<div id="linkDot"></div><span id="linkLabel"></span>
 <div id="app">
   <div class="top" id="top" style="display:none">
     <svg class="mark" id="brandMark" viewBox="0 0 40 40"><path fill="#E9653A" d="M37 20 28.5 34.72 11.5 34.72 3 20 11.5 5.28 28.5 5.28Z"/><path fill="#fff" d="M20 12.6 29.5 22.1 25.7 25.9 20 20.2 14.3 25.9 10.5 22.1Z"/></svg>
@@ -276,8 +278,9 @@ setInterval(() => {
 let wifiSkip = false;
 async function tick() {
   let st;
-  try { st = await j('/api/status'); } catch { $('linkDot').className = 'red'; return; }
+  try { st = await j('/api/status'); } catch { $('linkDot').className = 'red'; $('linkLabel').textContent = 'Offline'; return; }
   $('linkDot').className = st.link || '';
+  $('linkLabel').textContent = {green:'Live', amber:'Server issue', red:'Offline'}[st.link] || '';
   if (st.mode === 'pairing') {
     stopSlides();
     const fresh = st.last_ok && (Date.now() / 1000 - st.last_ok < 60);
