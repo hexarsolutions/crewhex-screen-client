@@ -199,8 +199,64 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # ---- Wi-Fi setup (no Ethernet case) ----
+    def _wifi_available(self):
+        import shutil
+        return shutil.which("nmcli") is not None
+
+    def do_POST(self):
+        if self.path == "/api/wifi/connect" and self._wifi_available():
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b"{}")
+            except Exception:
+                return self.send_json({"error": "bad body"}, 400)
+            ssid = str(body.get("ssid") or "").strip()
+            pw = str(body.get("password") or "")
+            if not ssid:
+                return self.send_json({"error": "ssid required"}, 400)
+            cmd = ["nmcli", "dev", "wifi", "connect", ssid]
+            if pw:
+                cmd += ["password", pw]
+            import subprocess as sp
+            r = sp.run(cmd, capture_output=True, text=True, timeout=45)
+            ok = r.returncode == 0 and "successfully" in (r.stdout + r.stderr).lower()
+            # let NM settle, then probe the API
+            time.sleep(3)
+            reachable = False
+            try:
+                api_request("GET", "/health", timeout=6)
+                reachable = True
+            except Exception:
+                pass
+            return self.send_json({"ok": ok, "reachable": reachable,
+                                   "detail": (r.stdout + r.stderr).strip()[-200:]})
+        return self.send_json({"error": "not found"}, 404)
+
     def do_GET(self):
+        if self.path == "/api/wifi/scan":
+            if not self._wifi_available():
+                return self.send_json({"available": False, "networks": []})
+            import subprocess as sp
+            try:
+                sp.run(["nmcli", "dev", "wifi", "rescan"], capture_output=True, timeout=10)
+            except Exception:
+                pass
+            r = sp.run(["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"],
+                       capture_output=True, text=True, timeout=15)
+            nets = {}
+            for line in r.stdout.splitlines():
+                parts = line.split(":")
+                if len(parts) < 3 or not parts[0]:
+                    continue
+                ssid, sig, sec = parts[0], parts[1], ":".join(parts[2:])
+                if ssid not in nets or int(sig or 0) > int(nets[ssid]["signal"] or 0):
+                    nets[ssid] = {"ssid": ssid, "signal": sig,
+                                  "secure": bool(sec and sec != "--")}
+            out = sorted(nets.values(), key=lambda x: -int(x["signal"] or 0))[:12]
+            return self.send_json({"available": True, "networks": out})
         with STATE.lock:
+            age = (time.time() - STATE.last_ok) if STATE.last_ok else 1e9
             snap = {
                 "mode": "content" if STATE.device_token else "pairing",
                 "api_base": STATE.api_base,
@@ -210,6 +266,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "content": STATE.content,
                 "last_ok": STATE.last_ok,
                 "last_error": STATE.last_error,
+                "link": "green" if age < 90 else ("amber" if age < 300 else "red"),
                 "now": time.time(),
             }
         if self.path == "/api/status":
