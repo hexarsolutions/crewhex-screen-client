@@ -26,6 +26,8 @@ from pathlib import Path
 CONFIG_PATH = os.environ.get("SCREEN_CONFIG", "/etc/crewhex-screen/config.json")
 STATE_PATH = os.environ.get("SCREEN_STATE", "/var/lib/crewhex-screen/device.json")
 STATIC_DIR = Path(__file__).resolve().parent / "kiosk"
+VERSION_PATH = Path(__file__).resolve().parent / "VERSION"
+CLIENT_VERSION = (VERSION_PATH.read_text().strip() if VERSION_PATH.exists() else "dev")
 POLL_CONTENT = 20          # seconds between content polls
 POLL_PAIRING = 3           # seconds between pairing-status polls
 HEARTBEAT = 60             # seconds between heartbeats
@@ -166,16 +168,76 @@ def heartbeat():
         pass  # heartbeat failures are non-fatal; content poll reports errors
 
 
+# ---- OTA: tenant pushes a new client version from Tenant Hub ----
+def check_update():
+    try:
+        from urllib.parse import quote
+        r = api_request("GET", "/api/v1/hub-device/update-check?current="
+                        + quote(CLIENT_VERSION), token=STATE.device_token, timeout=8)
+    except Exception:
+        return
+    if r.get("update") and r.get("url"):
+        apply_update(r["url"], r["version"])
+
+
+def apply_update(url, version):
+    """Download the pushed client bundle, swap it in, restart. The screen is
+    offline for a few seconds while systemd relaunches the service."""
+    import shutil, subprocess, tarfile
+    tmp = Path("/tmp/crewhex-update")
+    shutil.rmtree(tmp, ignore_errors=True); tmp.mkdir(parents=True)
+    tarball = tmp / "client.tar.gz"
+    try:
+        urllib.request.urlretrieve(url, tarball)
+        with tarfile.open(tarball) as t:
+            t.extractall(tmp)
+    except Exception as e:
+        print("[screen] update download failed:", str(e)[:120], flush=True)
+        return
+    dest = Path(__file__).resolve().parent
+    src = tmp / "client"
+    swapped = False
+    for rel in ("screen_client.py", "kiosk/index.html"):
+        s = src / rel
+        if s.exists():
+            shutil.copy2(s, dest / rel); swapped = True
+    if not swapped:
+        print("[screen] update bundle missing expected files", flush=True)
+        return
+    (dest / "VERSION").write_text(version + "\n")
+    st = load_json(STATE_PATH, {})
+    st["updated_to"] = version
+    save_json(STATE_PATH, st)
+    print("[screen] updated client to", version, "- restarting service", flush=True)
+    subprocess.Popen(["systemctl", "restart", "crewhex-screen"])
+    os._exit(0)  # systemd brings the new version straight back up
+
+
+def confirm_update():
+    """Tell the server the pushed version is running, clearing the flag."""
+    try:
+        api_request("POST", "/api/v1/hub-device/update-applied", {},
+                    token=STATE.device_token, timeout=5)
+    except Exception:
+        pass
+    st = load_json(STATE_PATH, {})
+    st.pop("updated_to", None)
+    save_json(STATE_PATH, st)
+
+
 def worker():
     # Restore or mint a pairing code on boot.
     with STATE.lock:
         STATE.pairing_code = new_code() if not STATE.device_token else None
+    if STATE.device_token and load_json(STATE_PATH, {}).get("updated_to"):
+        confirm_update()   # finishing an OTA that restarted us
     next_heartbeat = 0
     while True:
         if not STATE.device_token:
             try_pair()
             time.sleep(POLL_PAIRING)
             continue
+        check_update()
         poll_content()
         if time.time() >= next_heartbeat:
             heartbeat()
