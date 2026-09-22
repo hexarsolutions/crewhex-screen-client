@@ -185,18 +185,20 @@ def check_update():
 def apply_update(url, version):
     """Download the pushed client bundle, swap it in, restart. The screen is
     offline for a few seconds while systemd relaunches the service."""
-    import shutil, subprocess, tarfile
-    # systemd ProtectSystem=strict makes /tmp read-only; stage the update under
-    # STATE_PATH, which the service unit explicitly permits writing to.
+    import shutil, subprocess, tarfile, urllib.request as _req
     tmp = Path(STATE_PATH).parent / "crewhex-update"
     shutil.rmtree(tmp, ignore_errors=True); tmp.mkdir(parents=True, exist_ok=True)
     tarball = tmp / "client.tar.gz"
     try:
-        urllib.request.urlretrieve(url, tarball)
+        import socket
+        socket.setdefaulttimeout(20)
+        _req.urlretrieve(url, tarball)
+        socket.setdefaulttimeout(None)
         with tarfile.open(tarball) as t:
             t.extractall(tmp)
     except Exception as e:
-        print("[screen] update download failed:", str(e)[:120], flush=True)
+        socket.setdefaulttimeout(None)
+        print("[screen] update download failed:", str(e)[:160], flush=True)
         return
     dest = Path(__file__).resolve().parent
     src = tmp / "client"
@@ -237,16 +239,20 @@ def worker():
         confirm_update()   # finishing an OTA that restarted us
     next_heartbeat = 0
     while True:
-        if not STATE.device_token:
-            try_pair()
-            time.sleep(POLL_PAIRING)
-            continue
-        check_update()
-        poll_content()
-        if time.time() >= next_heartbeat:
-            heartbeat()
-            next_heartbeat = time.time() + HEARTBEAT
-        time.sleep(POLL_CONTENT)
+        try:
+            if not STATE.device_token:
+                try_pair()
+                time.sleep(POLL_PAIRING)
+                continue
+            check_update()
+            poll_content()
+            if time.time() >= next_heartbeat:
+                heartbeat()
+                next_heartbeat = time.time() + HEARTBEAT
+            time.sleep(POLL_CONTENT)
+        except Exception as e:
+            print("[screen] worker cycle error:", str(e)[:160], flush=True)
+            time.sleep(POLL_CONTENT)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
