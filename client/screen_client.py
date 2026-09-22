@@ -218,7 +218,7 @@ def apply_update(url, version):
 def confirm_update():
     """Tell the server the pushed version is running, clearing the flag."""
     try:
-        api_request("POST", "/api/v1/hub-device/update-applied", {},
+        api_request("POST", "/api/v1/hub-device/update-applied", {"version": CLIENT_VERSION},
                     token=STATE.device_token, timeout=5)
     except Exception:
         pass
