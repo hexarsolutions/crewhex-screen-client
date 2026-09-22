@@ -86,7 +86,8 @@ Requires=crewhex-screen.service
 [Service]
 User=$SERVICE_USER
 Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $SERVICE_USER)
-ExecStartPre=/bin/sh -c 'test -d $XDG_RUNTIME_DIR || { mkdir -p \$XDG_RUNTIME_DIR; chown $SERVICE_USER \$XDG_RUNTIME_DIR; }'
+ExecStartPre=/bin/mkdir -p /run/user/$(id -u $SERVICE_USER)
+ExecStartPre=/bin/chown $SERVICE_USER /run/user/$(id -u $SERVICE_USER)
 ExecStart=/usr/bin/xinit /usr/bin/openbox-session -- :0 vt7
 Restart=always
 RestartSec=5
