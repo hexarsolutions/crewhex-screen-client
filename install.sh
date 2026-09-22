@@ -75,45 +75,34 @@ ReadWritePaths=$STATE_DIR $CONFIG_DIR
 WantedBy=multi-user.target
 EOF
 
-echo "== kiosk (chromium, fullscreen) =="
-# Lightweight X session: openbox autostarts chromium in kiosk mode.
+echo "== kiosk (Chromium on the existing Raspberry Pi desktop) =="
+# Raspberry Pi OS starts LightDM/Xwayland for the autologin user. Reuse that
+# display instead of launching a second X server on :0.
+KIOSK_USER="${SUDO_USER:-admin}"
+if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
+  echo "Kiosk desktop user '$KIOSK_USER' not found" >&2; exit 1
+fi
+KIOSK_UID=$(id -u "$KIOSK_USER")
+KIOSK_HOME=$(getent passwd "$KIOSK_USER" | cut -d: -f6)
 cat > /etc/systemd/system/crewhex-kiosk.service <<EOF
 [Unit]
 Description=CrewHex Screen Kiosk (Chromium)
-After=crewhex-screen.service
+After=lightdm.service graphical.target crewhex-screen.service
+Wants=lightdm.service
 Requires=crewhex-screen.service
 
 [Service]
-User=$SERVICE_USER
-RuntimeDirectory=crewhex-kiosk
-RuntimeDirectoryMode=0700
-Environment=XDG_RUNTIME_DIR=/run/crewhex-kiosk
-ExecStart=/usr/bin/xinit /usr/bin/openbox-session -- :0 vt7
+User=$KIOSK_USER
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=$KIOSK_HOME/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/$KIOSK_UID
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$KIOSK_UID/bus
+ExecStart=/usr/bin/chromium --ozone-platform=x11 --kiosk --noerrdialogs --disable-infobars --disable-features=Translate --check-for-update-interval=31536000 --autoplay-policy=no-user-gesture-required --disable-session-crashed-bubble --start-fullscreen http://127.0.0.1:8080/
 Restart=always
 RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
-EOF
-
-KIOSK_DIR=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
-sudo -u "$SERVICE_USER" mkdir -p "$KIOSK_DIR/.config/openbox"
-cat > "$KIOSK_DIR/.config/openbox/autostart" <<'EOF'
-# CrewHex kiosk
-xset s off -dpms &
-unclutter -idle 0 &
-chromium \
-  --kiosk --noerrdialogs --disable-infobars --disable-features=Translate \
-  --check-for-update-interval=31536000 --autoplay-policy=no-user-gesture-required \
-  --disable-session-crashed-bubble --start-fullscreen \
-  http://127.0.0.1:8080/ &
-EOF
-chown -R "$SERVICE_USER:$SERVICE_USER" "$KIOSK_DIR/.config"
-
-# Permit the service user to use the X server on vt7
-cat > /etc/X11/Xwrapper.config <<'EOF'
-allowed_users=anybody
-needs_root_rights=yes
+WantedBy=graphical.target
 EOF
 
 echo "== enable =="
