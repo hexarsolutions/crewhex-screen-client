@@ -186,8 +186,10 @@ def apply_update(url, version):
     """Download the pushed client bundle, swap it in, restart. The screen is
     offline for a few seconds while systemd relaunches the service."""
     import shutil, subprocess, tarfile
-    tmp = Path("/tmp/crewhex-update")
-    shutil.rmtree(tmp, ignore_errors=True); tmp.mkdir(parents=True)
+    # systemd ProtectSystem=strict makes /tmp read-only; stage the update under
+    # STATE_PATH, which the service unit explicitly permits writing to.
+    tmp = Path(STATE_PATH).parent / "crewhex-update"
+    shutil.rmtree(tmp, ignore_errors=True); tmp.mkdir(parents=True, exist_ok=True)
     tarball = tmp / "client.tar.gz"
     try:
         urllib.request.urlretrieve(url, tarball)
