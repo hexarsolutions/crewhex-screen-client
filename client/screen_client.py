@@ -178,6 +178,8 @@ def check_update():
         return
     if r.get("update") and r.get("url"):
         apply_update(r["url"], r["version"])
+    elif r.get("confirmed_current"):
+        confirm_update()   # already running the pushed version — clear the flag
 
 
 def apply_update(url, version):
