@@ -216,8 +216,13 @@ function buildSlides(content) {
     const s = document.createElement('div');
     s.className = 'slide' + (i === 0 ? ' on' : '');
     const cfg = p.published_config || p.config || {};
-    const blocks = Array.isArray(cfg.blocks) ? cfg.blocks : null;
+    const blocks = Array.isArray(cfg.blocks) ? cfg.blocks.filter(b => b && (b.type !== 'image' || b.image_url) && (b.type !== 'text' || (b.text || '').trim()) && (b.type !== 'heading' || (b.text || '').trim())) : null;
     let inner = '';
+    const legacyMsg = (cfg.message || cfg.body || '').trim();
+    if (blocks && blocks.length && legacyMsg && !blocks.some(b => b.type === 'text' || b.type === 'list' || b.type === 'image')) {
+      // Page has builder blocks but no content block — show the legacy message text too
+      blocks.push({type: 'text', size: 'full', text: legacyMsg});
+    }
     if (blocks && blocks.length) {
       // Page-builder block stack
       inner = blocks.map(b => {
