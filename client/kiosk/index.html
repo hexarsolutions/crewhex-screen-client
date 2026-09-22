@@ -43,6 +43,9 @@
   .row .t { font-size:min(2.4vw,26px); font-weight:600; }
   .row .s { margin-left:auto; font-size:min(1.8vw,19px); color:#8b95a1; }
   .clock { font-size:15px; color:#8b95a1; font-variant-numeric:tabular-nums; }
+  .stats-row { display:flex; gap:5vw; }
+  .stat-l { font-size:min(1.4vw,15px); letter-spacing:.12em; color:#8b95a1; }
+  .stat-v { font-size:min(4vw,44px); font-weight:800; color:#fff; font-variant-numeric:tabular-nums; }
 
   /* ---------- after hours / offline ---------- */
   .veil { position:fixed; inset:0; background:var(--ink); display:none;
@@ -207,26 +210,61 @@ function buildSlides(content) {
       '<div class="msg">Publish pages from the CrewHex tenant app.</div></div>';
     return;
   }
+  const accent = (content && content.branding && content.branding.primary_colour) || '#E9653A';
+  document.documentElement.style.setProperty('--orange', accent);
   pages.forEach((p, i) => {
     const s = document.createElement('div');
     s.className = 'slide' + (i === 0 ? ' on' : '');
     const cfg = p.published_config || p.config || {};
-    let inner = '<h2>' + esc(p.title) + '</h2>';
-    const msg = cfg.message || cfg.body || '';
-    if (msg) inner += '<div class="msg">' + esc(msg) + '</div>';
-    const items = cfg.items || cfg.rows || [];
-    if (Array.isArray(items) && items.length) {
-      inner += '<div class="list">' + items.map(it =>
-        '<div class="row"><span class="t">' + esc(it.title || it.name || '') +
-        '</span><span class="s">' + esc(it.subtitle || it.detail || '') +
-        '</span></div>').join('') + '</div>';
+    const blocks = Array.isArray(cfg.blocks) ? cfg.blocks : null;
+    let inner = '';
+    if (blocks && blocks.length) {
+      // Page-builder block stack
+      inner = blocks.map(b => {
+        if (b.type === 'heading')
+          return '<div style="align-self:flex-start;background:' + accent + ';color:#fff;font-weight:800;font-size:min(4.6vw,50px);padding:.3em .6em;border-radius:14px">' + esc(b.text || '') + '</div>';
+        if (b.type === 'text')
+          return '<div class="msg">' + esc(b.text || '') + '</div>';
+        if (b.type === 'image')
+          return b.image_url ? '<img src="' + esc(b.image_url) + '" style="max-width:78%;max-height:62vh;border-radius:16px;object-fit:contain">' : '';
+        if (b.type === 'list')
+          return '<div class="list">' + (b.items || []).map(it => '<div class="row"><span class="t">' + esc(it) + '</span></div>').join('') + '</div>';
+        if (b.type === 'stats')
+          return '<div class="stats-row" data-stats="1"><div><div class="stat-l">FUEL THIS MONTH</div><div class="stat-v" data-fuel>$0</div></div><div><div class="stat-l">LITRES</div><div class="stat-v" data-litres>0 L</div></div>' + (b.show_vehicles ? '<div><div class="stat-l">SERVICE DUE</div><div class="stat-v" data-veh>—</div></div>' : '') + '</div>';
+        if (b.type === 'footer')
+          return '<div class="foot" style="display:flex;justify-content:space-between;width:100%"><span>CrewHex</span><span data-clock style="font-variant-numeric:tabular-nums"></span></div>';
+        return '';
+      }).join('');
+    } else {
+      // Legacy template fallback
+      inner = '<h2>' + esc(p.title) + '</h2>';
+      const msg = cfg.message || cfg.body || '';
+      if (msg) inner += '<div class="msg">' + esc(msg) + '</div>';
+      const items = cfg.items || cfg.rows || [];
+      if (Array.isArray(items) && items.length) {
+        inner += '<div class="list">' + items.map(it =>
+          '<div class="row"><span class="t">' + esc(it.title || it.name || '') +
+          '</span><span class="s">' + esc(it.subtitle || it.detail || '') +
+          '</span></div>').join('') + '</div>';
+      }
+      inner += '<div class="foot">' + esc(p.title) + ' &middot; CrewHex</div>';
     }
-    inner += '<div class="foot">' + esc(p.title) + ' &middot; CrewHex</div>';
     s.innerHTML = inner;
     stage.appendChild(s);
     slides.push({el: s, secs: Math.max(5, Number(p.rotation_seconds) || 30)});
   });
+  fillLive(content);
 }
+function fillLive(content) {
+  const live = (content && content.live) || {};
+  document.querySelectorAll('[data-fuel]').forEach(el => el.textContent = '$' + (live.fuel_dollars ?? 0));
+  document.querySelectorAll('[data-litres]').forEach(el => el.textContent = (live.fuel_litres ?? 0) + ' L');
+  document.querySelectorAll('[data-veh]').forEach(el => el.textContent = live.vehicles_due ?? '—');
+}
+setInterval(() => {
+  const t = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  document.querySelectorAll('[data-clock]').forEach(el => el.textContent = t);
+}, 1000);
 
 function show(i) {
   slides.forEach((s, k) => s.el.classList.toggle('on', k === i));
