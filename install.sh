@@ -85,9 +85,9 @@ Requires=crewhex-screen.service
 
 [Service]
 User=$SERVICE_USER
-Environment=XDG_RUNTIME_DIR=/run/user/$(id -u $SERVICE_USER)
-ExecStartPre=/bin/mkdir -p /run/user/$(id -u $SERVICE_USER)
-ExecStartPre=/bin/chown $SERVICE_USER /run/user/$(id -u $SERVICE_USER)
+RuntimeDirectory=crewhex-kiosk
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/crewhex-kiosk
 ExecStart=/usr/bin/xinit /usr/bin/openbox-session -- :0 vt7
 Restart=always
 RestartSec=5
