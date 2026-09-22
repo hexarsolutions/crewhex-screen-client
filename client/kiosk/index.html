@@ -60,7 +60,8 @@
 <body>
 <div id="app">
   <div class="top" id="top" style="display:none">
-    <svg class="mark" viewBox="0 0 40 40"><path fill="#E9653A" d="M37 20 28.5 34.72 11.5 34.72 3 20 11.5 5.28 28.5 5.28Z"/><path fill="#fff" d="M20 12.6 29.5 22.1 25.7 25.9 20 20.2 14.3 25.9 10.5 22.1Z"/></svg>
+    <svg class="mark" id="brandMark" viewBox="0 0 40 40"><path fill="#E9653A" d="M37 20 28.5 34.72 11.5 34.72 3 20 11.5 5.28 28.5 5.28Z"/><path fill="#fff" d="M20 12.6 29.5 22.1 25.7 25.9 20 20.2 14.3 25.9 10.5 22.1Z"/></svg>
+    <img class="mark" id="brandLogo" alt="" style="display:none;object-fit:contain;border-radius:6px;background:#fff">
     <span class="name" id="dispName">CrewHex Screen</span>
     <span class="clock" id="clock"></span>
     <span class="page" id="pageIdx"></span>
@@ -214,6 +215,16 @@ async function tick() {
 
   const pages = (content && content.pages || []);
   if (!pages.length) { stopSlides(); return; }
+
+  /* tenant branding — logo replaces the CrewHex mark */
+  const b = (content && content.branding) || {};
+  if (b.logo_url) {
+    const img = $('brandLogo');
+    if (img.src !== b.logo_url) img.src = b.logo_url;
+    img.style.display = 'block';
+    $('brandMark').style.display = 'none';
+    if (b.name) document.title = b.name + ' · CrewHex';
+  }
 
   if (afterHours(content) && (content.display?.after_hours_mode !== 'content')) {
     stopSlides();
