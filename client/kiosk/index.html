@@ -202,7 +202,17 @@ function showPairing(st) {
 /* ---- content ---- */
 function esc(s) { const d = document.createElement('div'); d.textContent = s ?? ''; return d.innerHTML; }
 
+let _lastSig = '';
+function contentSig(content) {
+  const pages = (content && content.pages || []).filter(p => p.enabled !== false);
+  return (content && content.version || '') + '|' +
+    pages.map(p => p.page_key + '|' + p.rotation_seconds + '|' + JSON.stringify(p.published_config || p.config || {})).join(';') +
+    '|' + JSON.stringify(content && content.live || {});
+}
 function buildSlides(content) {
+  const sig = contentSig(content);
+  if (sig === _lastSig && slides.length) { fillLive(content); return; }  // unchanged — don't rebuild (avoids 5s flash)
+  _lastSig = sig;
   const stage = $('stage'); stage.innerHTML = ''; slides = [];
   const pages = (content && content.pages || []).filter(p => p.enabled !== false);
   if (!pages.length) {
