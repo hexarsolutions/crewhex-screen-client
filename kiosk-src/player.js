@@ -374,7 +374,14 @@
   function banner(text, tone) {
     var b = document.getElementById('banner');
     if (!text) { b.style.display = 'none'; return; }
-    b.textContent = text; b.className = tone === 'danger' ? 'danger' : ''; b.style.display = 'block';
+    // rolling marquee: NOTICE tag + text repeated so it loops seamlessly
+    b.className = tone === 'danger' ? 'danger' : '';
+    b.innerHTML = '';
+    var tag = el('div', 'btag', 'NOTICE'); b.appendChild(tag);
+    var roll = el('div', 'broll'); var track = el('div', 'btrack');
+    for (var k = 0; k < 4; k++) { track.appendChild(el('i')); track.appendChild(el('span', null, text)); }
+    roll.appendChild(track); b.appendChild(roll);
+    b.style.display = 'block';
   }
   function countPlay(ref, seconds) {
     var d = new Date(), day = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
@@ -427,8 +434,9 @@
         await waitChange(myGen, 30000); continue;
       }
       if (r.mode === 'override' && !r.playlist_id) {
-        S.current = 'broadcast'; show(messageLayer({ title: r.message, body: '' }, r.tone || 'alert'));
-        await waitChange(myGen, 10000); continue;
+        // Text-only broadcast = rolling banner over the normal programme.
+        // Fall through to the default items below; the banner stays up.
+        r.mode = 'default'; S.resKey = keyOf(r);
       }
       var items = itemsFor(r);
       if (!items.length) {
