@@ -137,7 +137,7 @@ not completing), download that release package and run its installer. This
 preserves the paired device token under `/var/lib/crewhex-screen/device.json`:
 
 ```bash
-VERSION=v1.1.6
+VERSION=v1.1.7
 curl -fL "https://github.com/hexarsolutions/crewhex-screen-client/releases/download/${VERSION}/crewhex-screen-client-${VERSION}.tar.gz" -o /tmp/crewhex-screen-client.tar.gz
 tar -xzf /tmp/crewhex-screen-client.tar.gz -C /tmp
 cd "/tmp/crewhex-screen-client-${VERSION}"
@@ -202,7 +202,12 @@ blocks may carry `x/y/w/h` percentages for canvas positioning; blocks without
 geometry keep the classic stacked layout. Older clients may not match the
 canvas geometry, so update the screen before using positioned layouts. Client
 v1.1.6 also grants the narrowly scoped write access required for OTA file swaps
-and keeps content polling alive when an update attempt fails.
+and keeps content polling alive when an update attempt fails. v1.1.7 adds a
+dedicated after-hours **Screen saver (7)**: it is excluded from the normal
+1–6 rotation and can show the tenant's company logo, uploaded image, and text.
+Choose it under **Tenant Hub → After-hours display**; edit and publish the
+Screen saver (7) page like any other canvas page. The Pi displays the last
+published saver when outside operating hours (or when paused), if selected.
 
 ## Status
 
