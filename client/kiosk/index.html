@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-v84wkabguFH5nSxEwCIL6ImXfI72tIW/I6bL+rSRCFk='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-lJl2DHDwNSOpg1qL+ZTX0Uy0Av1IHvin1JHxpCzsNq8='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
 <title>CrewHex screen</title>
 <style>/* CrewHex screen player — shared by the hosted player and the Pi kiosk build. */
 :root {
@@ -53,6 +53,10 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
 .pwrow button { padding: 1.6vh 2vw; border-radius: 1vh; border: 0; background: var(--brand); color: #fff; font-weight: 700; font-size: 2.6vh; cursor: pointer; }
 .setupnote { margin-top: 1.6vh; color: #b9c2cc; font-size: 2.2vh; min-height: 3vh; }
 .linkbtn { margin-top: 2vh; background: none; border: 0; color: var(--brand); font: inherit; font-size: 2.2vh; cursor: pointer; text-decoration: underline; }
+
+/* recognition slide */
+.reco { background: #20262d; border-radius: 1.2vh; padding: 2.2vh 2.4vw; margin-top: 1.6vh; max-width: 80ch; }
+.reco .reco-msg { font-size: 3.2vh; margin-top: .8vh; color: #e8e4dc; }
 
 /* media / web / message */
 .media { background: #000; }
@@ -601,7 +605,12 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
     if (!text) { b.style.display = 'none'; return; }
     // rolling marquee: NOTICE tag + text repeated so it loops seamlessly
     b.className = tone === 'danger' ? 'danger' : '';
+    b.style.background = '';
     b.innerHTML = '';
+    if (tone !== 'danger') {
+      var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
+      if (pc) b.style.background = safeColour(pc, '');
+    }
     var tag = el('div', 'btag', 'NOTICE'); b.appendChild(tag);
     var roll = el('div', 'broll'); var track = el('div', 'btrack');
     for (var k = 0; k < 4; k++) { track.appendChild(el('i')); track.appendChild(el('span', null, text)); }
@@ -669,6 +678,9 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
         show(messageLayer({ title: 'Nothing to show yet', body: 'Publish Hub pages or schedule a playlist for this screen in CrewHex.' }, 'info'));
         await waitChange(myGen, 15000); continue;
       }
+      if ((S.manifest && S.manifest.shoutouts || []).length && S.current !== 'recognition') {
+        items = items.concat([{ id: 'recognition', kind: 'recognition', secs: 10 }]);
+      }
       var listKey = S.resKey, i = (S.idx[listKey] || 0) % items.length;
       S.idx[listKey] = i + 1;
       var item = items[i];
@@ -720,12 +732,32 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
       f.setAttribute('referrerpolicy', 'no-referrer');
       f.setAttribute('allow', 'autoplay');
       f.src = item.url; L.appendChild(f);
+    } else if (item.kind === 'recognition') {
+      L = recognitionLayer(); dur = 10e3;
     } else if (item.kind === 'message') {
       L = messageLayer(item.config || {}, (item.config && item.config.tone) || 'info');
     } else { return; }
     show(L);
     await waitChange(gen, dur);
     setTimeout(releaseBlobs, 800);
+  }
+
+  function recognitionLayer() {
+    // Recent staff shoutouts (recognition notices) as a slide.
+    var L = el('div', 'layer page'), st = el('div', 'stage'); L.appendChild(st);
+    var sl = el('div', 'slide');
+    sl.appendChild(el('h2', null, 'Recognition'));
+    var items = (S.manifest && S.manifest.shoutouts || []).slice(0, 3);
+    items.forEach(function (so) {
+      var card = el('div', 'reco');
+      var who = el('div', 'reco-who'); who.appendChild(el('b', null, so.to_name));
+      who.appendChild(document.createTextNode(' — recognised by ' + so.from_name));
+      card.appendChild(who);
+      card.appendChild(el('div', 'reco-msg', so.message));
+      sl.appendChild(card);
+    });
+    st.appendChild(sl);
+    return L;
   }
 
   function messageLayer(cfg, tone) {

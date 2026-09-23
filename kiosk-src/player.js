@@ -376,7 +376,12 @@
     if (!text) { b.style.display = 'none'; return; }
     // rolling marquee: NOTICE tag + text repeated so it loops seamlessly
     b.className = tone === 'danger' ? 'danger' : '';
+    b.style.background = '';
     b.innerHTML = '';
+    if (tone !== 'danger') {
+      var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
+      if (pc) b.style.background = safeColour(pc, '');
+    }
     var tag = el('div', 'btag', 'NOTICE'); b.appendChild(tag);
     var roll = el('div', 'broll'); var track = el('div', 'btrack');
     for (var k = 0; k < 4; k++) { track.appendChild(el('i')); track.appendChild(el('span', null, text)); }
@@ -444,6 +449,9 @@
         show(messageLayer({ title: 'Nothing to show yet', body: 'Publish Hub pages or schedule a playlist for this screen in CrewHex.' }, 'info'));
         await waitChange(myGen, 15000); continue;
       }
+      if ((S.manifest && S.manifest.shoutouts || []).length && S.current !== 'recognition') {
+        items = items.concat([{ id: 'recognition', kind: 'recognition', secs: 10 }]);
+      }
       var listKey = S.resKey, i = (S.idx[listKey] || 0) % items.length;
       S.idx[listKey] = i + 1;
       var item = items[i];
@@ -495,12 +503,32 @@
       f.setAttribute('referrerpolicy', 'no-referrer');
       f.setAttribute('allow', 'autoplay');
       f.src = item.url; L.appendChild(f);
+    } else if (item.kind === 'recognition') {
+      L = recognitionLayer(); dur = 10e3;
     } else if (item.kind === 'message') {
       L = messageLayer(item.config || {}, (item.config && item.config.tone) || 'info');
     } else { return; }
     show(L);
     await waitChange(gen, dur);
     setTimeout(releaseBlobs, 800);
+  }
+
+  function recognitionLayer() {
+    // Recent staff shoutouts (recognition notices) as a slide.
+    var L = el('div', 'layer page'), st = el('div', 'stage'); L.appendChild(st);
+    var sl = el('div', 'slide');
+    sl.appendChild(el('h2', null, 'Recognition'));
+    var items = (S.manifest && S.manifest.shoutouts || []).slice(0, 3);
+    items.forEach(function (so) {
+      var card = el('div', 'reco');
+      var who = el('div', 'reco-who'); who.appendChild(el('b', null, so.to_name));
+      who.appendChild(document.createTextNode(' — recognised by ' + so.from_name));
+      card.appendChild(who);
+      card.appendChild(el('div', 'reco-msg', so.message));
+      sl.appendChild(card);
+    });
+    st.appendChild(sl);
+    return L;
   }
 
   function messageLayer(cfg, tone) {
