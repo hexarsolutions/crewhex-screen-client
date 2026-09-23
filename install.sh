@@ -6,6 +6,9 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/hexarsolutions/crewhex-screen-client"
+# Rolling bundle served by CrewHex itself, so devices never need a GitHub login
+BUNDLE_BASE="${CREWHEX_BUNDLE_BASE:-https://api.crewhex.com/public}"
+BUNDLE_VERSION="${CREWHEX_VERSION:-latest}"
 INSTALL_DIR="/opt/crewhex-screen"
 CONFIG_DIR="/etc/crewhex-screen"
 STATE_DIR="/var/lib/crewhex-screen"
@@ -39,7 +42,18 @@ if [[ -f "$(cd "$(dirname "$0")" && pwd)/client/screen_client.py" ]]; then
   SRC="$(cd "$(dirname "$0")" && pwd)"          # run from a checkout/package
 else
   SRC=$(mktemp -d)
-  curl -fsSL "$REPO_URL/archive/refs/heads/main.tar.gz" | tar -xz -C "$SRC" --strip-components=1
+  if curl -fsSL "$BUNDLE_BASE/screen-client-$BUNDLE_VERSION.tar.gz" -o "$SRC/bundle.tar.gz"; then
+    if curl -fsSL "$BUNDLE_BASE/screen-client-$BUNDLE_VERSION.tar.gz.sha256" -o "$SRC/bundle.sha256"; then
+      want=$(cut -d' ' -f1 < "$SRC/bundle.sha256")
+      got=$(sha256sum "$SRC/bundle.tar.gz" | cut -d' ' -f1)
+      [[ "$want" == "$got" ]] || { echo "bundle checksum mismatch - refusing to install"; exit 1; }
+      echo "bundle sha256 ok"
+    fi
+    tar -xzf "$SRC/bundle.tar.gz" -C "$SRC"
+  else
+    echo "no bundle at $BUNDLE_BASE - falling back to GitHub (needs access)"
+    curl -fsSL "$REPO_URL/archive/refs/heads/main.tar.gz" | tar -xz -C "$SRC" --strip-components=1
+  fi
 fi
 cp -r "$SRC/client/." "$INSTALL_DIR/"
 cp -r "$SRC/client/kiosk" "$INSTALL_DIR/kiosk"
