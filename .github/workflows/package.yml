@@ -55,9 +55,19 @@ jobs:
           PKG="crewhex-screen-client-${VER}"
           mkdir -p "/tmp/${PKG}"
           cp -r client install.sh README.md docs "/tmp/${PKG}/"
+          rm -rf "/tmp/${PKG}/client/__pycache__"
           tar -czf "${PKG}.tar.gz" -C /tmp "${PKG}"
           sha256sum "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
+
+          # OTA bundle has client/ at archive root, as apply_update expects.
+          OTA="screen-client-${VER}"
+          mkdir -p "/tmp/${OTA}"
+          cp -r client "/tmp/${OTA}/client"
+          rm -rf "/tmp/${OTA}/client/__pycache__"
+          tar -czf "${OTA}.tar.gz" -C "/tmp/${OTA}" client
+          sha256sum "${OTA}.tar.gz" > "${OTA}.tar.gz.sha256"
           echo "PKG=${PKG}.tar.gz" >> "$GITHUB_ENV"
+          echo "OTA=${OTA}.tar.gz" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -65,6 +75,8 @@ jobs:
           path: |
             crewhex-screen-client-*.tar.gz
             crewhex-screen-client-*.tar.gz.sha256
+            screen-client-*.tar.gz
+            screen-client-*.tar.gz.sha256
 
       - name: Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -73,3 +85,5 @@ jobs:
           files: |
             crewhex-screen-client-*.tar.gz
             crewhex-screen-client-*.tar.gz.sha256
+            screen-client-*.tar.gz
+            screen-client-*.tar.gz.sha256

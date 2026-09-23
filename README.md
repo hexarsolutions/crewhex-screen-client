@@ -48,8 +48,9 @@ or monitor with HDMI, and internet (Wi-Fi or ethernet cable).*
    install the free "Raspberry Pi Imager" from
    [raspberrypi.com/software](https://www.raspberrypi.com/software/).
    Insert the microSD card, open the Imager, choose
-   *Raspberry Pi OS (32-bit)*, choose your SD card, then click **Next →
-   Edit Settings** and set:
+   *Raspberry Pi OS with desktop* (not Lite; the kiosk uses the existing
+   LightDM/Xwayland desktop session), choose your SD card, then click
+   **Next → Edit Settings** and set:
    - hostname: `crewhex-screen`
    - enable SSH (optional, for support)
    - your Wi-Fi network name + password (if not using a cable)
@@ -63,8 +64,9 @@ or monitor with HDMI, and internet (Wi-Fi or ethernet cable).*
    curl -fsSL https://raw.githubusercontent.com/hexarsolutions/crewhex-screen-client/main/install.sh | sudo bash
    ```
 
-   Then walk away — it installs everything and reboots into the
-   fullscreen CrewHex screen on its own (5–10 minutes).
+   The installer installs the client and systemd services and starts them.
+   It reuses the Pi's existing desktop session, so you normally don't need
+   a separate X setup or a reboot; allow a few minutes for package installs.
 4. **Link it to your business** — the TV now shows a 6-digit PIN.
    On any computer, sign in to CrewHex, open **Screens → Add screen**,
    type your business login name (the same one you use to sign in,
@@ -121,18 +123,25 @@ journalctl -u crewhex-screen -u crewhex-kiosk -f
 
 ## Updating the screen (OTA)
 
-You never need to touch the Pi for updates. From the tenant app
-(**Screens → Client update → Push to screen**) the server queues a new
-client version; the Pi downloads it on its next update check (every ~20s),
-applies it, and restarts itself. If the download fails it retries on the
-next cycle — the worker never dies, so heartbeats keep flowing and the
-screen never goes dark over a bad update.
+From the tenant app (**Screens → Client update → Push to screen**) the
+server queues a new client version. A healthy Pi checks about every 20s,
+downloads the OTA bundle, applies it, and restarts the client service (the
+kiosk stays in the existing desktop session). Downloads have a timeout; on
+failure the client logs the error and retries on a later cycle. Confirm the
+new version and a fresh heartbeat in Screens before considering the update
+done. GitHub tag releases include both the tenant install archive and the
+root-layout `screen-client-vX.Y.Z.tar.gz` used by this OTA endpoint.
 
-To re-flash a badly broken screen manually (or to jump straight to a known
-version without OTA), re-run the installer pinned to that fix:
+To re-install a specific GitHub release manually (for example, when OTA is
+not completing), download that release package and run its installer. This
+preserves the paired device token under `/var/lib/crewhex-screen/device.json`:
 
 ```bash
-curl -fsSL 'https://raw.githubusercontent.com/hexarsolutions/crewhex-screen-client/main/install.sh' | sudo bash
+VERSION=v1.1.5
+curl -fL "https://github.com/hexarsolutions/crewhex-screen-client/releases/download/${VERSION}/crewhex-screen-client-${VERSION}.tar.gz" -o /tmp/crewhex-screen-client.tar.gz
+tar -xzf /tmp/crewhex-screen-client.tar.gz -C /tmp
+cd "/tmp/crewhex-screen-client-${VERSION}"
+sudo bash install.sh
 sudo systemctl restart crewhex-screen crewhex-kiosk
 ```
 
@@ -147,6 +156,7 @@ sudo systemctl restart crewhex-screen crewhex-kiosk
 | Black screen / no signal | TV input or power | Check HDMI is in the right input, power LED on the Pi is lit |
 | PIN stuck for a long time | It has never been linked | The PIN refreshes every ~15 minutes; pair from CrewHex |
 | Text too small / too large on the TV | Sizing is viewport-scaled | Update to v1.1.4+ (Screens → Client update) |
+| Pages stop after a reconnect | Older clients could clear the slide list but not rebuild it on reconnect | Update to v1.1.5+ and confirm applied in Screens |
 
 To get the PIN back on a screen that was already linked (e.g. moving it to
 a different site), on the Pi's terminal run:
@@ -187,9 +197,10 @@ against the screen alone; content mode lights up once the server side
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
 Page layout: pages are built in the tenant app's **page builder** (a 16:9
-canvas editor with drag/resize, templates and undo). Blocks may carry
-`x/y/w/h` percentages for canvas positioning; blocks without geometry
-render in the classic stacked layout. Both forms render on the TV as-is.
+canvas editor with drag/resize, templates and undo). From screen client v1.1.5,
+blocks may carry `x/y/w/h` percentages for canvas positioning; blocks without
+geometry keep the classic stacked layout. Older clients may not match the
+canvas geometry, so update the screen before using positioned layouts.
 
 ## Status
 
