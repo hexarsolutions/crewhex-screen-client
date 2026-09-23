@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.1';
+  var VERSION = '2.0.2';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -428,8 +428,14 @@
       var myGen = S.gen;
       if (repairing || (!LOCAL && !S.token) || (LOCAL && S.status.mode !== 'content')) { await sleep(1000); continue; }
       if (!S.manifest) { show(messageLayer({ title: 'Waiting for content', body: 'This screen is paired. Content appears once it is published.' }, 'info')); await waitChange(myGen, 5000); continue; }
-      var r = resolution(); S.resKey = keyOf(r);
-      banner(r.mode === 'override' && r.playlist_id && r.message ? r.message : '', r.tone);
+      var r = resolution();
+      var textOverride = r.mode === 'override' && !r.playlist_id && r.message ? { message: r.message, tone: r.tone } : null;
+      if (r.mode === 'override' && r.message) banner(r.message, r.tone);
+      else banner('', null);
+      // A text-only broadcast is an overlay, not a content replacement. Resolve
+      // the underlying schedule/default without the override so the programme keeps playing.
+      if (textOverride) r = ChxResolver.resolve(S.manifest.display, S.manifest.schedules, [], new Date());
+      S.resKey = keyOf(r);
       var ahm = S.manifest.display.after_hours_mode || 'blank';
       if (r.mode === 'off' || (r.mode === 'after_hours' && ahm === 'blank')) {
         S.current = r.mode; show(el('div', 'layer blank')); await waitChange(myGen, 30000); continue;
@@ -437,11 +443,6 @@
       if (r.mode === 'after_hours' && ahm === 'message') {
         S.current = 'after_hours'; show(messageLayer({ title: S.manifest.display.after_hours_message || 'Closed', body: '' }, 'info'));
         await waitChange(myGen, 30000); continue;
-      }
-      if (r.mode === 'override' && !r.playlist_id) {
-        // Text-only broadcast = rolling banner over the normal programme.
-        // Fall through to the default items below; the banner stays up.
-        r.mode = 'default'; S.resKey = keyOf(r);
       }
       var items = itemsFor(r);
       if (!items.length) {
