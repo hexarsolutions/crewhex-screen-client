@@ -218,3 +218,13 @@ published saver when outside operating hours (or when paused), if selected.
 - [x] CI packaging (release tarballs per tag)
 - [x] Server: pairing endpoint, token-authed content + heartbeat *(CrewHex app)*
 - [x] Server: **Screens** admin page in the tenant app *(CrewHex app)*
+
+## 2026-09-24 — server-side changes (no client update required)
+
+- Expiring announcements: heading/text blocks can carry an optional `ends_at`
+  ("Show until" in the page editor). The server strips expired blocks from both
+  the legacy `/hub-device/content` payload and the v2 manifest, so screens stop
+  showing expired announcements without touching the client. No tag needed.
+- Signage media URLs (`/uploads/signage/...`) are now HMAC-signed
+  (`?exp=…&sig=…`). Players fetch URLs from the server, so existing clients are
+  unaffected; unsigned direct links now return 403.
