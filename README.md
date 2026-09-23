@@ -33,7 +33,8 @@ public API using the documented protocol in
    the screen. The server binds the display to that tenant and issues a
    device token.
 3. **Run** — the client stores the token, polls for published pages,
-   rotates them fullscreen, handles after-hours mode, and heartbeats so
+   rotates them fullscreen (typography and padding scale with the TV so a
+   big screen stays readable), handles after-hours mode, and heartbeats so
    the tenant can see the screen is online.
 
 ## Install (Raspberry Pi)
@@ -104,14 +105,35 @@ What the installer sets up:
 * `/opt/crewhex-screen/` — the client
 * `/etc/crewhex-screen/config.json` — `api_base`, `display_name`, `port`
 * `/var/lib/crewhex-screen/device.json` — the device token (0600)
-* `crewhex-screen.service` — the client (systemd, restarts on failure)
-* `crewhex-kiosk.service` — X + Chromium fullscreen pointing at the client
+* `crewhex-screen.service` — the client (systemd, restarts on failure,
+  hardened sandbox: OTA updates stage under `/var/lib/crewhex-screen`,
+  never `/tmp`)
+* `crewhex-kiosk.service` — Chromium in kiosk mode, running **inside the
+  Raspberry Pi's own desktop session** (LightDM autologin on display `:0`)
+  pointed at the client — the installer never starts a second X server
 * A dedicated `crewhex-screen` system user (video/input groups)
 
 Logs:
 
 ```bash
 journalctl -u crewhex-screen -u crewhex-kiosk -f
+```
+
+## Updating the screen (OTA)
+
+You never need to touch the Pi for updates. From the tenant app
+(**Screens → Client update → Push to screen**) the server queues a new
+client version; the Pi downloads it on its next update check (every ~20s),
+applies it, and restarts itself. If the download fails it retries on the
+next cycle — the worker never dies, so heartbeats keep flowing and the
+screen never goes dark over a bad update.
+
+To re-flash a badly broken screen manually (or to jump straight to a known
+version without OTA), re-run the installer pinned to that fix:
+
+```bash
+curl -fsSL 'https://raw.githubusercontent.com/hexarsolutions/crewhex-screen-client/main/install.sh' | sudo bash
+sudo systemctl restart crewhex-screen crewhex-kiosk
 ```
 
 ## Troubleshooting (plain English)
@@ -124,6 +146,7 @@ journalctl -u crewhex-screen -u crewhex-kiosk -f
 | "Outside operating hours" | Your business hours settings | Change hours in CrewHex (Screens settings) |
 | Black screen / no signal | TV input or power | Check HDMI is in the right input, power LED on the Pi is lit |
 | PIN stuck for a long time | It has never been linked | The PIN refreshes every ~15 minutes; pair from CrewHex |
+| Text too small / too large on the TV | Sizing is viewport-scaled | Update to v1.1.4+ (Screens → Client update) |
 
 To get the PIN back on a screen that was already linked (e.g. moving it to
 a different site), on the Pi's terminal run:
@@ -163,10 +186,17 @@ against the screen alone; content mode lights up once the server side
 (pairing + token-authed content) is deployed — the exact JSON contract is
 [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
+Page layout: pages are built in the tenant app's **page builder** (a 16:9
+canvas editor with drag/resize, templates and undo). Blocks may carry
+`x/y/w/h` percentages for canvas positioning; blocks without geometry
+render in the classic stacked layout. Both forms render on the TV as-is.
+
 ## Status
 
 - [x] Screen client (pairing, content rotation, after-hours, heartbeat)
-- [x] Installer + systemd/kiosk setup for Raspberry Pi OS
+- [x] OTA updates from the Tenant Hub (staged safely, timeout-guarded, worker survives failures)
+- [x] Viewport-scaled kiosk typography (readable on large TVs)
+- [x] Installer + systemd/kiosk setup for Raspberry Pi OS (reuses the LightDM desktop session)
 - [x] CI packaging (release tarballs per tag)
-- [ ] Server: pairing endpoint, token-authed content + heartbeat *(CrewHex app)*
-- [ ] Server: **Screens** admin page in the tenant app *(CrewHex app)*
+- [x] Server: pairing endpoint, token-authed content + heartbeat *(CrewHex app)*
+- [x] Server: **Screens** admin page in the tenant app *(CrewHex app)*
