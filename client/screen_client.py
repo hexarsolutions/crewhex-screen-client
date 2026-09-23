@@ -185,38 +185,41 @@ def check_update():
 def apply_update(url, version):
     """Download the pushed client bundle, swap it in, restart. The screen is
     offline for a few seconds while systemd relaunches the service."""
-    import shutil, subprocess, tarfile, urllib.request as _req
+    import shutil, tarfile, urllib.request as _req
     tmp = Path(STATE_PATH).parent / "crewhex-update"
     shutil.rmtree(tmp, ignore_errors=True); tmp.mkdir(parents=True, exist_ok=True)
     tarball = tmp / "client.tar.gz"
+    import socket
     try:
-        import socket
         socket.setdefaulttimeout(20)
         _req.urlretrieve(url, tarball)
-        socket.setdefaulttimeout(None)
         with tarfile.open(tarball) as t:
             t.extractall(tmp)
+        dest = Path(__file__).resolve().parent
+        src = tmp / "client"
+        rels = ("screen_client.py", "kiosk/index.html", "VERSION")
+        if not all((src / rel).is_file() for rel in rels):
+            print("[screen] update bundle missing expected files", flush=True)
+            return
+        # Replace each file atomically. A filesystem or permission error is
+        # logged and retried next cycle; it must not starve content/heartbeat.
+        for rel in rels:
+            staged = dest / (rel.replace('/', '_') + ".new")
+            shutil.copy2(src / rel, staged)
+            os.replace(staged, dest / rel)
+        (dest / "VERSION").write_text(version + "\n")
+        st = load_json(STATE_PATH, {})
+        st["updated_to"] = version
+        save_json(STATE_PATH, st)
     except Exception as e:
+        print("[screen] update apply failed:", str(e)[:160], flush=True)
+        return
+    finally:
         socket.setdefaulttimeout(None)
-        print("[screen] update download failed:", str(e)[:160], flush=True)
-        return
-    dest = Path(__file__).resolve().parent
-    src = tmp / "client"
-    swapped = False
-    for rel in ("screen_client.py", "kiosk/index.html"):
-        s = src / rel
-        if s.exists():
-            shutil.copy2(s, dest / rel); swapped = True
-    if not swapped:
-        print("[screen] update bundle missing expected files", flush=True)
-        return
-    (dest / "VERSION").write_text(version + "\n")
-    st = load_json(STATE_PATH, {})
-    st["updated_to"] = version
-    save_json(STATE_PATH, st)
     print("[screen] updated client to", version, "- restarting service", flush=True)
-    subprocess.Popen(["systemctl", "restart", "crewhex-screen"])
-    os._exit(0)  # systemd brings the new version straight back up
+    # Restart=always does the restart as the service exits. The unprivileged
+    # client must not call systemctl to restart its own unit.
+    os._exit(0)
 
 
 def confirm_update():

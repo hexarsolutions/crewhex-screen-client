@@ -52,8 +52,20 @@ cat > "$CONFIG_DIR/config.json" <<EOF
 }
 EOF
 [[ -f "$STATE_DIR/device.json" ]] || echo '{}' > "$STATE_DIR/device.json"
+# Mark a manual reinstall as applied so the paired screen updates its version in Tenant Hub.
+if [[ -f "$STATE_DIR/device.json" && -f "$INSTALL_DIR/VERSION" ]]; then
+  python3 - "$STATE_DIR/device.json" "$INSTALL_DIR/VERSION" <<'PY'
+import json, pathlib, sys
+state_path, version_path = map(pathlib.Path, sys.argv[1:])
+try: state = json.loads(state_path.read_text())
+except Exception: state = {}
+if state.get("device_token"):
+    state["updated_to"] = version_path.read_text().strip()
+    state_path.write_text(json.dumps(state, indent=2))
+PY
+fi
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR" "$CONFIG_DIR" "$STATE_DIR"
-chmod 750 "$STATE_DIR"; chmod 640 "$STATE_DIR/device.json" "$CONFIG_DIR/config.json"
+chmod 750 "$STATE_DIR"; chmod 600 "$STATE_DIR/device.json"; chmod 640 "$CONFIG_DIR/config.json"
 
 echo "== systemd service =="
 cat > /etc/systemd/system/crewhex-screen.service <<EOF
@@ -69,7 +81,8 @@ Restart=always
 RestartSec=5
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=$STATE_DIR $CONFIG_DIR
+# OTA swaps only the client files under INSTALL_DIR; all other paths remain read-only.
+ReadWritePaths=$STATE_DIR $CONFIG_DIR $INSTALL_DIR
 
 [Install]
 WantedBy=multi-user.target

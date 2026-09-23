@@ -137,7 +137,7 @@ not completing), download that release package and run its installer. This
 preserves the paired device token under `/var/lib/crewhex-screen/device.json`:
 
 ```bash
-VERSION=v1.1.5
+VERSION=v1.1.6
 curl -fL "https://github.com/hexarsolutions/crewhex-screen-client/releases/download/${VERSION}/crewhex-screen-client-${VERSION}.tar.gz" -o /tmp/crewhex-screen-client.tar.gz
 tar -xzf /tmp/crewhex-screen-client.tar.gz -C /tmp
 cd "/tmp/crewhex-screen-client-${VERSION}"
@@ -200,7 +200,9 @@ Page layout: pages are built in the tenant app's **page builder** (a 16:9
 canvas editor with drag/resize, templates and undo). From screen client v1.1.5,
 blocks may carry `x/y/w/h` percentages for canvas positioning; blocks without
 geometry keep the classic stacked layout. Older clients may not match the
-canvas geometry, so update the screen before using positioned layouts.
+canvas geometry, so update the screen before using positioned layouts. Client
+v1.1.6 also grants the narrowly scoped write access required for OTA file swaps
+and keeps content polling alive when an update attempt fails.
 
 ## Status
 
