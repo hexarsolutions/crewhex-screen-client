@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-lJl2DHDwNSOpg1qL+ZTX0Uy0Av1IHvin1JHxpCzsNq8='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-LEkZt6Jn1CmcmSdicEE6B7y+1G60vdMQfzKv/KCgGfo='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
 <title>CrewHex screen</title>
 <style>/* CrewHex screen player — shared by the hosted player and the Pi kiosk build. */
 :root {
@@ -53,6 +53,11 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
 .pwrow button { padding: 1.6vh 2vw; border-radius: 1vh; border: 0; background: var(--brand); color: #fff; font-weight: 700; font-size: 2.6vh; cursor: pointer; }
 .setupnote { margin-top: 1.6vh; color: #b9c2cc; font-size: 2.2vh; min-height: 3vh; }
 .linkbtn { margin-top: 2vh; background: none; border: 0; color: var(--brand); font: inherit; font-size: 2.2vh; cursor: pointer; text-decoration: underline; }
+
+/* logo block */
+.logo-box { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.logo-stack { display: flex; justify-content: center; }
+.logo-stack img { max-height: 22cqh; }
 
 /* recognition slide */
 .reco { background: #20262d; border-radius: 1.2vh; padding: 2.2vh 2.4vw; margin-top: 1.6vh; max-width: 80ch; }
@@ -246,7 +251,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.0';
+  var VERSION = '2.0.1';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -831,6 +836,14 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
     }
     if (b.type === 'text') { var t = el('div', 'msgtxt', b.text || ''); if (!stacked) css(t, { width: '100%', height: '100%', overflow: 'hidden' }); return t; }
     if (b.type === 'image') return imageNode(b, stacked);
+    if (b.type === 'logo') {                                  // tenant logo, centred in the block
+      var lp = el('div', stacked ? 'logo-stack' : 'logo-box');
+      var u = (S.manifest && S.manifest.branding && S.manifest.branding.logo_url) || '';
+      if (u) { var im = el('img'); im.alt = ''; im.setAttribute('referrerpolicy', 'no-referrer'); im.src = u;
+               css(im, { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block', margin: '0 auto' });
+               lp.appendChild(im); }
+      return lp;
+    }
     if (b.type === 'list') return listNode(b, stacked);
     if (b.type === 'stats') return statsNode(b, stacked);
     if (b.type === 'footer') return footerNode(b, stacked);

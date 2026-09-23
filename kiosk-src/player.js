@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.0';
+  var VERSION = '2.0.1';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -602,6 +602,14 @@
     }
     if (b.type === 'text') { var t = el('div', 'msgtxt', b.text || ''); if (!stacked) css(t, { width: '100%', height: '100%', overflow: 'hidden' }); return t; }
     if (b.type === 'image') return imageNode(b, stacked);
+    if (b.type === 'logo') {                                  // tenant logo, centred in the block
+      var lp = el('div', stacked ? 'logo-stack' : 'logo-box');
+      var u = (S.manifest && S.manifest.branding && S.manifest.branding.logo_url) || '';
+      if (u) { var im = el('img'); im.alt = ''; im.setAttribute('referrerpolicy', 'no-referrer'); im.src = u;
+               css(im, { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block', margin: '0 auto' });
+               lp.appendChild(im); }
+      return lp;
+    }
     if (b.type === 'list') return listNode(b, stacked);
     if (b.type === 'stats') return statsNode(b, stacked);
     if (b.type === 'footer') return footerNode(b, stacked);
