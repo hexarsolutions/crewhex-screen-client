@@ -110,6 +110,7 @@ if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
   echo "Kiosk desktop user '$KIOSK_USER' not found" >&2; exit 1
 fi
 KIOSK_UID=$(id -u "$KIOSK_USER")
+mkdir -p "$KIOSK_HOME/.config/crewhex-kiosk"; chown -R "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_HOME/.config/crewhex-kiosk"
 KIOSK_HOME=$(getent passwd "$KIOSK_USER" | cut -d: -f6)
 cat > /etc/systemd/system/crewhex-kiosk.service <<EOF
 [Unit]
@@ -124,7 +125,7 @@ Environment=DISPLAY=:0
 Environment=XAUTHORITY=$KIOSK_HOME/.Xauthority
 Environment=XDG_RUNTIME_DIR=/run/user/$KIOSK_UID
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$KIOSK_UID/bus
-ExecStart=/usr/bin/chromium --ozone-platform=x11 --kiosk --noerrdialogs --disable-infobars --disable-features=Translate --check-for-update-interval=31536000 --autoplay-policy=no-user-gesture-required --disable-session-crashed-bubble --start-fullscreen http://127.0.0.1:8080/
+ExecStart=/usr/bin/chromium --user-data-dir=$KIOSK_HOME/.config/crewhex-kiosk --no-first-run --no-default-browser-check --ozone-platform=x11 --kiosk --noerrdialogs --disable-infobars --disable-features=Translate --check-for-update-interval=31536000 --autoplay-policy=no-user-gesture-required --disable-session-crashed-bubble --start-fullscreen http://127.0.0.1:8080/
 Restart=always
 RestartSec=5
 
