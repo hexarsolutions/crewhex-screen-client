@@ -25,17 +25,15 @@ public API using the documented protocol in
 └───────────────┘        (content + heartbeat)
 ```
 
-1. **Boot** — the client starts and, with no stored token, shows a
-   fullscreen 6-digit pairing PIN.
-2. **Link** — a tenant admin opens **Screens → Add screen** in the CrewHex
-   tenant app and enters their **business login name** (the same identifier
-   used to sign in, e.g. `hexarsolutions`) plus the 6-digit PIN shown on
-   the screen. The server binds the display to that tenant and issues a
-   device token.
-3. **Run** — the client stores the token, polls for published pages,
-   rotates them fullscreen (typography and padding scale with the TV so a
-   big screen stays readable), handles after-hours mode, and heartbeats so
-   the tenant can see the screen is online.
+1. **Boot** — with no stored token the screen shows a 6-character pairing
+   code issued by CrewHex (no Wi-Fi yet? it offers Wi-Fi setup first).
+2. **Link** — a tenant admin opens **Screens → Add screen** in CrewHex and
+   types the code. That's all: the code identifies the business.
+3. **Run** — the client downloads the screen's playlists, schedules, Hub
+   pages, images and videos to the SD card (each checked by SHA-256), plays
+   them fullscreen, and keeps playing from the card if the internet drops.
+   It heartbeats every minute so **Screens** shows it online, what it's
+   playing, and its version.
 
 ## Install (Raspberry Pi)
 
@@ -67,12 +65,10 @@ or monitor with HDMI, and internet (Wi-Fi or ethernet cable).*
    The installer installs the client and systemd services and starts them.
    It reuses the Pi's existing desktop session, so you normally don't need
    a separate X setup or a reboot; allow a few minutes for package installs.
-4. **Link it to your business** — the TV now shows a 6-digit PIN.
+4. **Link it to your business** — the TV now shows a 6-character code.
    On any computer, sign in to CrewHex, open **Screens → Add screen**,
-   type your business login name (the same one you use to sign in,
-   e.g. `hexarsolutions`) plus the 6-digit PIN, and give the screen a
-   name like `Workshop TV`. Done — the screen starts showing your
-   published pages straight away.
+   type the code and give the screen a name like `Workshop TV`. Done —
+   it starts playing within a few seconds.
 
 *If anything goes wrong:* the screen tells you what it's doing. If it says
 "Reconnecting…", check the network cable/Wi-Fi. Full troubleshooting guide
@@ -107,9 +103,11 @@ What the installer sets up:
 * `/opt/crewhex-screen/` — the client
 * `/etc/crewhex-screen/config.json` — `api_base`, `display_name`, `port`
 * `/var/lib/crewhex-screen/device.json` — the device token (0600)
-* `crewhex-screen.service` — the client (systemd, restarts on failure,
-  hardened sandbox: OTA updates stage under `/var/lib/crewhex-screen`,
-  never `/tmp`)
+* `/var/lib/crewhex-screen/media/` and `manifest.json` — offline copy of the screen's content
+* `/var/lib/crewhex-screen/app/<version>/` — OTA builds (`/opt` stays read-only)
+* `crewhex-screen.service` — runs `launch.py`, which starts the newest good build
+  and rolls back after 3 failed starts (systemd sandbox: `ProtectSystem=strict`,
+  only `/var/lib/crewhex-screen` writable)
 * `crewhex-kiosk.service` — Chromium in kiosk mode, running **inside the
   Raspberry Pi's own desktop session** (LightDM autologin on display `:0`)
   pointed at the client — the installer never starts a second X server
@@ -145,13 +143,27 @@ sudo bash install.sh
 sudo systemctl restart crewhex-screen crewhex-kiosk
 ```
 
+## Upgrading to 2.0
+
+2.0 keeps the existing device token, so screens stay paired. Two routes:
+
+* **Reinstall (recommended, one-time):** run the install one-liner again on the Pi.
+  1.1.x OTA writes into `/opt`, which the 1.1.x service sandbox makes read-only,
+  so an OTA push from 1.1.5 usually logs a "Read-only file system" error and
+  changes nothing. Check with `journalctl -u crewhex-screen | grep -i read-only`.
+* **OTA:** works where `/opt` happens to be writable. 2.0 then hands itself off to
+  the launcher logic on first start.
+
+From 2.0 onward, OTA updates install under `/var/lib` and are signed.
+
 ## Troubleshooting (plain English)
 
 | What the screen shows | What it means | What to do |
 |---|---|---|
-| Big 6-digit PIN | Waiting to be linked to your business | Enter it in CrewHex → Screens → Add screen |
+| Big 6-character code | Waiting to be linked to your business | Type it in CrewHex → Screens → Add screen |
+| Wi-Fi network list | Not online yet and not paired | Pick your network, or plug in a cable and choose Skip |
+| Small "Offline — playing saved content" chip | Internet dropped | Nothing — it keeps playing and catches up when back |
 | PIN disappeared, pages showing | Paired and running normally | Nothing — enjoy it |
-| "Reconnecting…" | Can't reach the internet | Check the ethernet cable / Wi-Fi password; it recovers on its own |
 | "Outside operating hours" | Your business hours settings | Change hours in CrewHex (Screens settings) |
 | Black screen / no signal | TV input or power | Check HDMI is in the right input, power LED on the Pi is lit |
 | PIN stuck for a long time | It has never been linked | The PIN refreshes every ~15 minutes; pair from CrewHex |

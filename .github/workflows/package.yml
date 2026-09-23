@@ -10,74 +10,84 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.9', '3.11']        # Bullseye and Bookworm system Pythons
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '${{ matrix.python }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Syntax + generated kiosk is current
+        run: |
+          python3 -m py_compile client/screen_client.py client/launch.py
+          bash -n install.sh
+          python3 tools/build_kiosk.py --check
+          node -e "new Function(require('fs').readFileSync('kiosk-src/player.js','utf8'))"
+      - name: Resolver parity (same cases as the server)
+        run: node kiosk-src/resolver.test.cjs
+      - name: Client contract tests
+        run: |
+          pip install pytest
+          python3 -m pytest -q tests
+      - name: Smoke - boots into pairing with no server
+        run: |
+          mkdir -p /tmp/smoke
+          echo '{"api_base":"http://127.0.0.1:9","port":8123}' > /tmp/smoke/config.json
+          SCREEN_CONFIG=/tmp/smoke/config.json SCREEN_STATE=/tmp/smoke/state/device.json \
+            timeout 6 python3 client/launch.py &
+          sleep 3
+          curl -fsS -H 'X-CrewHex-Kiosk: 1' http://127.0.0.1:8123/api/status | tee /tmp/smoke/status.json
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8123/api/status)" = 403
+          curl -fsS http://127.0.0.1:8123/ | grep -q "CHX_TRANSPORT='local'"
+          python3 -c "import json; s=json.load(open('/tmp/smoke/status.json')); assert s['mode']=='pairing', s; print('ok', s['client_version'])"
+          wait || true
+
+  package:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Syntax checks
-        run: |
-          python3 -m py_compile client/screen_client.py
-          python3 - <<'PY'
-          import json, pathlib
-          html = pathlib.Path('client/kiosk/index.html').read_text()
-          assert 'pairVeil' in html and 'api/status' in html, 'kiosk missing expected hooks'
-          json.loads(pathlib.Path('docs/PROTOCOL.md').read_text().split('```json')[1].split('```')[0])
-          print('checks OK')
-          PY
-          bash -n install.sh
-
-      - name: Client smoke test (no server - pairing mode)
-        run: |
-          mkdir -p /tmp/smoke
-          SCREEN_CONFIG=/tmp/smoke/config.json SCREEN_STATE=/tmp/smoke/state.json \
-            timeout 4 python3 client/screen_client.py --port 8123 &
-          sleep 2
-          curl -fsS http://127.0.0.1:8123/api/status | tee /tmp/smoke/status.json
-          curl -fsS http://127.0.0.1:8123/ | grep -q pairVeil
-          python3 - <<'PY'
-          import json
-          s = json.load(open('/tmp/smoke/status.json'))
-          assert s['mode'] == 'pairing' and s['pairing_pin'], s
-          import re
-          assert re.fullmatch(r'[2-9]{6}', s['pairing_pin']), s
-          print('pairing PIN served:', s['pairing_pin'])
-          PY
-          wait || true
-
       - name: Package
         run: |
           VER="${GITHUB_REF_NAME:-main}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            test "v$(cat client/VERSION)" = "$VER" || { echo "tag $VER != client/VERSION $(cat client/VERSION)"; exit 1; }
+          fi
           PKG="crewhex-screen-client-${VER}"
           mkdir -p "/tmp/${PKG}"
           cp -r client install.sh README.md docs "/tmp/${PKG}/"
-          rm -rf "/tmp/${PKG}/client/__pycache__"
+          find "/tmp/${PKG}" -name __pycache__ -prune -exec rm -rf {} +
           tar -czf "${PKG}.tar.gz" -C /tmp "${PKG}"
           sha256sum "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256"
-
-          # OTA bundle has client/ at archive root, as apply_update expects.
-          OTA="screen-client-${VER}"
+          # OTA bundle: client/ at archive root, regular files only (the client rejects anything else).
+          OTA="screen-client-${VER#v}"
           mkdir -p "/tmp/${OTA}"
           cp -r client "/tmp/${OTA}/client"
-          rm -rf "/tmp/${OTA}/client/__pycache__"
-          tar -czf "${OTA}.tar.gz" -C "/tmp/${OTA}" client
-          sha256sum "${OTA}.tar.gz" > "${OTA}.tar.gz.sha256"
-          echo "PKG=${PKG}.tar.gz" >> "$GITHUB_ENV"
+          find "/tmp/${OTA}" -name __pycache__ -prune -exec rm -rf {} +
+          tar -czf "${OTA}.tar.gz" --owner=0 --group=0 -C "/tmp/${OTA}" client
+          sha256sum "${OTA}.tar.gz" | cut -d' ' -f1 > "${OTA}.tar.gz.sha256"
           echo "OTA=${OTA}.tar.gz" >> "$GITHUB_ENV"
-
+      - name: Sign OTA bundle (ed25519)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          test -n "$OTA_SIGNING_KEY" || { echo "OTA_SIGNING_KEY secret missing - refusing to release unsigned"; exit 1; }
+          test -f client/ota_pubkey.pem || { echo "client/ota_pubkey.pem missing - screens could not verify"; exit 1; }
+          umask 077; printf '%s\n' "$OTA_SIGNING_KEY" > /tmp/ota.key
+          openssl pkeyutl -sign -inkey /tmp/ota.key -rawin -in "$OTA" -out "$OTA.sig"
+          openssl pkeyutl -verify -pubin -inkey client/ota_pubkey.pem -rawin -in "$OTA" -sigfile "$OTA.sig"
+          rm -f /tmp/ota.key
       - uses: actions/upload-artifact@v4
         with:
           name: crewhex-screen-client
           path: |
-            crewhex-screen-client-*.tar.gz
-            crewhex-screen-client-*.tar.gz.sha256
-            screen-client-*.tar.gz
-            screen-client-*.tar.gz.sha256
-
+            crewhex-screen-client-*.tar.gz*
+            screen-client-*.tar.gz*
       - name: Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -87,3 +97,4 @@ jobs:
             crewhex-screen-client-*.tar.gz.sha256
             screen-client-*.tar.gz
             screen-client-*.tar.gz.sha256
+            screen-client-*.tar.gz.sig
