@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-T3i4yAuYWrmQO/DCgF1+x4BAQKSPUI97mLs7xYQ4CKw='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-Bdgj/iKV/cXjx4yySAXnYc3hx9yS/gbN/3TXXK/uXf8='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
 <title>CrewHex screen</title>
 <style>/* CrewHex screen player — shared by the hosted player and the Pi kiosk build. */
 :root {
@@ -114,11 +114,11 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
                 display: grid; place-items: center; font-size: 2.4vh; font-weight: 800; letter-spacing: .08em; color: #fff; z-index: 2; }
 #banner .broll { position: absolute; left: 0; top: 0; bottom: 0; right: 0; display: flex; align-items: center; }
 #banner .btrack { display: flex; align-items: center; white-space: nowrap; padding-left: 9.5vw;
-                  animation: chxbroll 14s linear infinite; }
-#banner .btrack span { font-size: 4vh; font-weight: 800; padding-right: 7vw; color: #111417; }
+                  animation: chxbroll 16s linear infinite; }
+#banner .btrack span { font-size: 4vh; font-weight: 800; padding-right: 7vw; color: inherit; }
 #banner .btrack i { flex: none; width: 1.6vh; height: 1.6vh; border-radius: 50%; background: currentColor; opacity: .8; margin-right: 7vw; }
-@keyframes chxbroll { from { transform: translateX(100vw); } to { transform: translateX(-50%); } }
-#banner.danger { background: var(--red); color: #fff; }
+@keyframes chxbroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+#banner.danger { background: var(--red); color: #111417; }
 #ident { position: fixed; inset: 0; display: none; z-index: 30; place-items: center; background: rgba(0,0,0,.72); }
 #ident div { font-size: 9vh; font-weight: 800; padding: 3vh 5vw; border: .8vh solid var(--brand); border-radius: 2vh; }
 #net { position: fixed; right: 1.4vw; bottom: 1.4vw; display: none; align-items: center; gap: .8vw; z-index: 40;
@@ -255,7 +255,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.4';
+  var VERSION = '2.0.5';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -615,17 +615,18 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
     // rolling marquee: NOTICE tag + text repeated so it loops seamlessly
     b.className = tone === 'danger' ? 'danger' : '';
     b.style.background = '';
+    b.style.color = '';
     b.innerHTML = '';
-    if (tone !== 'danger') {
-      var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
-      if (pc) b.style.background = safeColour(pc, '');
-      // auto-contrast: dark text on light banner, white on dark
-      var lum = 0.5;
-      if (pc) { var m = safeColour(pc, '').match(/^#([0-9a-f]{6})$/i);
-        if (m) { var hx = m[1]; lum = (0.299*parseInt(hx.substr(0,2),16)+0.587*parseInt(hx.substr(2,2),16)+0.114*parseInt(hx.substr(4,2),16))/255; } }
-      var lum = lum || 0; // computed above when possible
-      b.style.color = (lum > 0.62) ? '#111417' : '#ffffff';
+    var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
+    var bg = tone === 'danger' ? '#d64545' : (pc ? safeColour(pc, '') : '#f2a93b');
+    if (tone !== 'danger' && pc) b.style.background = bg;
+    // WCAG luminance: choose whichever of black/white gives stronger contrast.
+    var match = bg.match(/^#([0-9a-f]{6})$/i), L = 0.5;
+    if (match) {
+      var hx = match[1], ch = [0,2,4].map(function(i){var v=parseInt(hx.substr(i,2),16)/255;return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4);});
+      L = 0.2126*ch[0] + 0.7152*ch[1] + 0.0722*ch[2];
     }
+    b.style.color = (L > 0.179) ? '#111417' : '#ffffff';
     var tag = el('div', 'btag', 'NOTICE'); b.appendChild(tag);
     var roll = el('div', 'broll'); var track = el('div', 'btrack');
     for (var k = 0; k < 4; k++) { track.appendChild(el('i')); track.appendChild(el('span', null, text)); }
@@ -695,7 +696,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
         await waitChange(myGen, 15000); continue;
       }
       if ((S.manifest && S.manifest.shoutouts || []).length && S.current !== 'recognition') {
-        items = items.concat([{ id: 'recognition', kind: 'recognition', secs: 10 }]);
+        items = items.concat([{ id: 'recognition', kind: 'recognition', secs: 15 }]);
       }
       var listKey = S.resKey, i = (S.idx[listKey] || 0) % items.length;
       S.idx[listKey] = i + 1;

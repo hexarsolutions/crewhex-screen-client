@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.4';
+  var VERSION = '2.0.5';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -377,17 +377,18 @@
     // rolling marquee: NOTICE tag + text repeated so it loops seamlessly
     b.className = tone === 'danger' ? 'danger' : '';
     b.style.background = '';
+    b.style.color = '';
     b.innerHTML = '';
-    if (tone !== 'danger') {
-      var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
-      if (pc) b.style.background = safeColour(pc, '');
-      // auto-contrast: dark text on light banner, white on dark
-      var lum = 0.5;
-      if (pc) { var m = safeColour(pc, '').match(/^#([0-9a-f]{6})$/i);
-        if (m) { var hx = m[1]; lum = (0.299*parseInt(hx.substr(0,2),16)+0.587*parseInt(hx.substr(2,2),16)+0.114*parseInt(hx.substr(4,2),16))/255; } }
-      var lum = lum || 0; // computed above when possible
-      b.style.color = (lum > 0.62) ? '#111417' : '#ffffff';
+    var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
+    var bg = tone === 'danger' ? '#d64545' : (pc ? safeColour(pc, '') : '#f2a93b');
+    if (tone !== 'danger' && pc) b.style.background = bg;
+    // WCAG luminance: choose whichever of black/white gives stronger contrast.
+    var match = bg.match(/^#([0-9a-f]{6})$/i), L = 0.5;
+    if (match) {
+      var hx = match[1], ch = [0,2,4].map(function(i){var v=parseInt(hx.substr(i,2),16)/255;return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4);});
+      L = 0.2126*ch[0] + 0.7152*ch[1] + 0.0722*ch[2];
     }
+    b.style.color = (L > 0.179) ? '#111417' : '#ffffff';
     var tag = el('div', 'btag', 'NOTICE'); b.appendChild(tag);
     var roll = el('div', 'broll'); var track = el('div', 'btrack');
     for (var k = 0; k < 4; k++) { track.appendChild(el('i')); track.appendChild(el('span', null, text)); }
@@ -457,7 +458,7 @@
         await waitChange(myGen, 15000); continue;
       }
       if ((S.manifest && S.manifest.shoutouts || []).length && S.current !== 'recognition') {
-        items = items.concat([{ id: 'recognition', kind: 'recognition', secs: 10 }]);
+        items = items.concat([{ id: 'recognition', kind: 'recognition', secs: 15 }]);
       }
       var listKey = S.resKey, i = (S.idx[listKey] || 0) % items.length;
       S.idx[listKey] = i + 1;
