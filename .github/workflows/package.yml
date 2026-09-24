@@ -17,7 +17,7 @@ jobs:
         python: ['3.9', '3.11']        # Bullseye and Bookworm system Pythons
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: '${{ matrix.python }}' }
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
