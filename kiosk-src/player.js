@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.3';
+  var VERSION = '2.0.4';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -381,6 +381,12 @@
     if (tone !== 'danger') {
       var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
       if (pc) b.style.background = safeColour(pc, '');
+      // auto-contrast: dark text on light banner, white on dark
+      var lum = 0.5;
+      if (pc) { var m = safeColour(pc, '').match(/^#([0-9a-f]{6})$/i);
+        if (m) { var hx = m[1]; lum = (0.299*parseInt(hx.substr(0,2),16)+0.587*parseInt(hx.substr(2,2),16)+0.114*parseInt(hx.substr(4,2),16))/255; } }
+      var lum = lum || 0; // computed above when possible
+      b.style.color = (lum > 0.62) ? '#111417' : '#ffffff';
     }
     var tag = el('div', 'btag', 'NOTICE'); b.appendChild(tag);
     var roll = el('div', 'broll'); var track = el('div', 'btrack');
