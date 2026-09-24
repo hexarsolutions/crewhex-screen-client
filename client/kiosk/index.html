@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-Bdgj/iKV/cXjx4yySAXnYc3hx9yS/gbN/3TXXK/uXf8='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-qNay1Hv9levIJMDNWRAlgvVrE4GHbM72H3TLz2JYf98='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
 <title>CrewHex screen</title>
 <style>/* CrewHex screen player — shared by the hosted player and the Pi kiosk build. */
 :root {
@@ -255,7 +255,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.5';
+  var VERSION = '2.0.6';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -712,9 +712,15 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
     return new Promise(function (done) {
       var start = Date.now(), key = S.resKey, et = S.manifest && S.manifest.etag;
       var t = setInterval(function () {
-        var changed = S.gen !== gen || (S.manifest && keyOf(resolution()) !== key) ||
-          (key === '' && S.manifest && S.manifest.etag !== et);
-        if (changed || Date.now() - start >= ms) { clearInterval(t); done(); }
+        // Only a REAL content change may cut an item short. A transient status
+        // blip (S.gen) is ignored so the slide is not restarted mid-flight,
+        // which showed up as a flicker every few seconds on the wall screens.
+        var changed = false;
+        try {
+          changed = (S.manifest && keyOf(resolution()) !== key) ||
+            (key === '' && S.manifest && S.manifest.etag !== et);
+        } catch (e) { changed = true; }
+        if ((changed || Date.now() - start >= ms) && Date.now() - start >= 1000) { clearInterval(t); done(); }
       }, 1000);
     });
   }
@@ -921,8 +927,12 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
   async function boot() {
     if (LOCAL) {
       await waitLocalPaired();
+      var misses = 0;
       setInterval(function () { localStatus().then(function (st) {
-        if (st && st.mode !== 'content') { S.manifest = null; S.gen++; waitLocalPaired(); }
+        if (!st) { return; }
+        if (st.mode === 'content') { misses = 0; return; }
+        // two consecutive non-content replies = really unpaired, not a blip
+        if (++misses >= 2) { misses = 0; S.manifest = null; S.gen++; waitLocalPaired(); }
       }); }, FAST ? 1000 : 5000);
     } else if (!S.token) {
       await pairRemote();

@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.5';
+  var VERSION = '2.0.6';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -474,9 +474,15 @@
     return new Promise(function (done) {
       var start = Date.now(), key = S.resKey, et = S.manifest && S.manifest.etag;
       var t = setInterval(function () {
-        var changed = S.gen !== gen || (S.manifest && keyOf(resolution()) !== key) ||
-          (key === '' && S.manifest && S.manifest.etag !== et);
-        if (changed || Date.now() - start >= ms) { clearInterval(t); done(); }
+        // Only a REAL content change may cut an item short. A transient status
+        // blip (S.gen) is ignored so the slide is not restarted mid-flight,
+        // which showed up as a flicker every few seconds on the wall screens.
+        var changed = false;
+        try {
+          changed = (S.manifest && keyOf(resolution()) !== key) ||
+            (key === '' && S.manifest && S.manifest.etag !== et);
+        } catch (e) { changed = true; }
+        if ((changed || Date.now() - start >= ms) && Date.now() - start >= 1000) { clearInterval(t); done(); }
       }, 1000);
     });
   }
@@ -683,8 +689,12 @@
   async function boot() {
     if (LOCAL) {
       await waitLocalPaired();
+      var misses = 0;
       setInterval(function () { localStatus().then(function (st) {
-        if (st && st.mode !== 'content') { S.manifest = null; S.gen++; waitLocalPaired(); }
+        if (!st) { return; }
+        if (st.mode === 'content') { misses = 0; return; }
+        // two consecutive non-content replies = really unpaired, not a blip
+        if (++misses >= 2) { misses = 0; S.manifest = null; S.gen++; waitLocalPaired(); }
       }); }, FAST ? 1000 : 5000);
     } else if (!S.token) {
       await pairRemote();
