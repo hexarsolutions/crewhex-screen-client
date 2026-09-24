@@ -21,9 +21,15 @@ def h(s):
     return "'sha256-" + base64.b64encode(hashlib.sha256(s.encode()).digest()).decode() + "'"
 
 
+def version():
+    return (ROOT / "client" / "VERSION").read_text().strip()
+
+
 def build():
     css = (SRC / "player.css").read_text()
-    boot = "window.CHX_TRANSPORT='local';"
+    # The player's version is injected here so it can never drift from
+    # client/VERSION (it did: the pairing screen showed 2.0.6 on a 2.0.7 build).
+    boot = "window.CHX_TRANSPORT='local';window.CHX_VERSION='%s';" % version()
     resolver = (SRC / "resolver.js").read_text()
     player = (SRC / "player.js").read_text()
     scripts = [boot, resolver, player]
@@ -58,7 +64,7 @@ if __name__ == "__main__":
     if "--check" in sys.argv:
         if not OUT.exists() or OUT.read_text() != html:
             sys.exit("client/kiosk/index.html is stale - run python3 tools/build_kiosk.py")
-        print("kiosk up to date")
+        print("kiosk up to date (v%s)" % version())
     else:
         OUT.write_text(html)
         print("wrote", OUT.relative_to(ROOT), len(html), "bytes")

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.0.8 (security + supply chain)
+
+- `install.sh`: KIOSK_HOME was read before it was set, so every fresh install
+  aborted with "unbound variable" under `set -u`. Fixed (order swapped).
+- `install.sh` now pins the version, requires the checksum *and* the ed25519
+  signature, verifies it against the public key embedded in the script, and
+  refuses to install on any failure. A missing `.sha256` is no longer a silent skip.
+- Banner colour: the player read `display.primary_colour`; the manifest publishes
+  `branding.primary_colour`. Every tenant banner had been falling back to amber.
+- Version drift: player.js hard-coded 2.0.6 while VERSION said 2.0.7, so the pairing
+  screen showed the wrong version. The build now injects `client/VERSION` and CI
+  fails if the two disagree.
+- Test bundles are signed with a throwaway key, so the suite passes with signatures
+  mandatory (CI had been red since the OTA public key shipped, which blocked package
+  and release publishing).
+
 ## 2.0.7
 
 - Broadcast overlay fix: a text-only broadcast is a banner over the programme, and the

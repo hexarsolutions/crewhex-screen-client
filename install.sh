@@ -16,6 +16,15 @@ SERVICE_USER="crewhex-screen"
 API_BASE="${CREWHEX_API_BASE:-https://api.crewhex.com}"
 DISPLAY_NAME="${CREWHEX_DISPLAY_NAME:-Screen}"
 
+# The OTA signing key screens trust. Update this only when the key rotates, and
+# only from client/ota_pubkey.pem in the repo.
+OTA_PUBKEY_PEM="$(cat <<'PEM'
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAapLnXvBlRuvihJpulXUWuUmPCKzpta5ahpKa0FOkmq0=
+-----END PUBLIC KEY-----
+PEM
+)"
+
 if [[ $EUID -ne 0 ]]; then echo "run as root (sudo)"; exit 1; fi
 if ! grep -qi raspberry /proc/device-tree/model 2>/dev/null; then
   echo "note: not a Raspberry Pi - continuing (any Debian works)"
@@ -42,18 +51,27 @@ if [[ -f "$(cd "$(dirname "$0")" && pwd)/client/screen_client.py" ]]; then
   SRC="$(cd "$(dirname "$0")" && pwd)"          # run from a checkout/package
 else
   SRC=$(mktemp -d)
-  if curl -fsSL "$BUNDLE_BASE/screen-client-$BUNDLE_VERSION.tar.gz" -o "$SRC/bundle.tar.gz"; then
-    if curl -fsSL "$BUNDLE_BASE/screen-client-$BUNDLE_VERSION.tar.gz.sha256" -o "$SRC/bundle.sha256"; then
-      want=$(cut -d' ' -f1 < "$SRC/bundle.sha256")
-      got=$(sha256sum "$SRC/bundle.tar.gz" | cut -d' ' -f1)
-      [[ "$want" == "$got" ]] || { echo "bundle checksum mismatch - refusing to install"; exit 1; }
-      echo "bundle sha256 ok"
-    fi
-    tar -xzf "$SRC/bundle.tar.gz" -C "$SRC"
-  else
-    echo "no bundle at $BUNDLE_BASE - falling back to GitHub (needs access)"
-    curl -fsSL "$REPO_URL/archive/refs/heads/main.tar.gz" | tar -xz -C "$SRC" --strip-components=1
-  fi
+  URL="$BUNDLE_BASE/screen-client-$BUNDLE_VERSION.tar.gz"
+  echo "downloading $URL"
+  curl -fsSL "$URL" -o "$SRC/bundle.tar.gz" || { echo "download failed - refusing to install"; exit 1; }
+  # Checksum: required. A checksum that cannot be fetched is a failed install,
+  # never a silent skip.
+  curl -fsSL "$URL.sha256" -o "$SRC/bundle.sha256" || { echo "no checksum at $URL.sha256 - refusing to install"; exit 1; }
+  want=$(cut -d' ' -f1 < "$SRC/bundle.sha256")
+  got=$(sha256sum "$SRC/bundle.tar.gz" | cut -d' ' -f1)
+  [[ "$want" == "$got" ]] || { echo "bundle checksum mismatch - refusing to install"; exit 1; }
+  echo "bundle sha256 ok"
+  # Signature: required. The public key below is the only key a screen trusts.
+  curl -fsSL "$URL.sig" -o "$SRC/bundle.sig" || { echo "no signature at $URL.sig - refusing to install"; exit 1; }
+  command -v openssl >/dev/null || { apt-get install -y -qq openssl || true; }
+  command -v openssl >/dev/null || { echo "openssl missing - cannot verify signature"; exit 1; }
+  printf '%s\n' "$OTA_PUBKEY_PEM" > "$SRC/ota_pubkey.pem"
+  openssl pkeyutl -verify -pubin -inkey "$SRC/ota_pubkey.pem" -rawin \
+    -in "$SRC/bundle.tar.gz" -sigfile "$SRC/bundle.sig" >/dev/null 2>&1 || {
+      echo "signature check FAILED - refusing to install"; exit 1; }
+  echo "bundle signature ok"
+  BUNDLE_VERSION=$(tar -xzOf "$SRC/bundle.tar.gz" client/VERSION 2>/dev/null | head -1 || true)
+  tar -xzf "$SRC/bundle.tar.gz" -C "$SRC"
 fi
 cp -r "$SRC/client/." "$INSTALL_DIR/"
 cp -r "$SRC/client/kiosk" "$INSTALL_DIR/kiosk"
@@ -110,8 +128,8 @@ if ! id -u "$KIOSK_USER" >/dev/null 2>&1; then
   echo "Kiosk desktop user '$KIOSK_USER' not found" >&2; exit 1
 fi
 KIOSK_UID=$(id -u "$KIOSK_USER")
+KIOSK_HOME=$(getent passwd "$KIOSK_USER" | cut -d: -f6)   # must be set before use (set -u)
 mkdir -p "$KIOSK_HOME/.config/crewhex-kiosk"; chown -R "$KIOSK_USER":"$KIOSK_USER" "$KIOSK_HOME/.config/crewhex-kiosk"
-KIOSK_HOME=$(getent passwd "$KIOSK_USER" | cut -d: -f6)
 cat > /etc/systemd/system/crewhex-kiosk.service <<EOF
 [Unit]
 Description=CrewHex Screen Kiosk (Chromium)

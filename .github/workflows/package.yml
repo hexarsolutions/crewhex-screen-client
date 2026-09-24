@@ -27,6 +27,28 @@ jobs:
           bash -n install.sh
           python3 tools/build_kiosk.py --check
           node -e "new Function(require('fs').readFileSync('kiosk-src/player.js','utf8'))"
+      - name: Version consistency
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          root = pathlib.Path('.')
+          v = (root/'client'/'VERSION').read_text().strip()
+          player = (root/'kiosk-src'/'player.js').read_text()
+          built = (root/'client'/'kiosk'/'index.html').read_text()
+          assert "window.CHX_VERSION || '%s'" % v in player, "player.js version fallback drifted from client/VERSION"
+          assert "window.CHX_VERSION='%s'" % v in built, "kiosk build did not inject client/VERSION"
+          print("version", v, "consistent")
+          PY
+          python3 - <<'PY'
+          import re, pathlib
+          src = (pathlib.Path('.')/'install.sh').read_text()
+          pem = re.search(r"OTA_PUBKEY_PEM=\"\$\(cat <<'PEM'\n(.*?)\nPEM", src, re.S)
+          assert pem, "install.sh must embed the OTA public key"
+          assert pem.group(1).strip() == (pathlib.Path('client')/'ota_pubkey.pem').read_text().strip()
+          assert src.index('KIOSK_HOME=$(getent passwd') < src.index('mkdir -p "$KIOSK_HOME/.config/crewhex-kiosk"')
+          print("installer key + ordering ok")
+          PY
+
       - name: Resolver parity (same cases as the server)
         run: node kiosk-src/resolver.test.cjs
       - name: Client contract tests
@@ -71,6 +93,8 @@ jobs:
           tar -czf "${OTA}.tar.gz" --owner=0 --group=0 -C "/tmp/${OTA}" client
           sha256sum "${OTA}.tar.gz" | cut -d' ' -f1 > "${OTA}.tar.gz.sha256"
           echo "OTA=${OTA}.tar.gz" >> "$GITHUB_ENV"
+      # Signing happens HERE and only here: the private key lives in the repo's
+      # OTA_SIGNING_KEY secret, not on anyone's laptop.
       - name: Sign OTA bundle (ed25519)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
@@ -88,6 +112,25 @@ jobs:
           path: |
             crewhex-screen-client-*.tar.gz*
             screen-client-*.tar.gz*
+      - name: Publish the signed bundle to the CrewHex VM (tags only)
+        if: startsWith(github.ref, 'refs/tags/v') && env.DEPLOY_KEY != ''
+        env:
+          DEPLOY_KEY: ${{ secrets.CREWHEX_DEPLOY_KEY }}
+        run: |
+          # Restricted deploy key: it may only write /srv/crewhex/public on the VM.
+          umask 077
+          printf '%s\n' "$DEPLOY_KEY" > /tmp/deploy.key
+          VER="${GITHUB_REF_NAME#v}"
+          scp -o StrictHostKeyChecking=accept-new -i /tmp/deploy.key \
+            "$OTA" "$OTA.sig" "screen-client-${VER}.tar.gz" "screen-client-${VER}.tar.gz.sig" \
+            deploy@api.crewhex.com:/srv/crewhex/public/
+          scp -o StrictHostKeyChecking=accept-new -i /tmp/deploy.key \
+            "screen-client-${VER}.tar.gz" deploy@api.crewhex.com:/srv/crewhex/public/screen-client-latest.tar.gz
+          scp -o StrictHostKeyChecking=accept-new -i /tmp/deploy.key \
+            "screen-client-${VER}.tar.gz.sig" deploy@api.crewhex.com:/srv/crewhex/public/screen-client-latest.tar.gz.sig
+          sha256sum "screen-client-${VER}.tar.gz" | cut -d' ' -f1 | ssh -i /tmp/deploy.key deploy@api.crewhex.com \
+            "tee /srv/crewhex/public/screen-client-${VER}.tar.gz.sha256 /srv/crewhex/public/screen-client-latest.tar.gz.sha256 >/dev/null"
+          rm -f /tmp/deploy.key
       - name: Release (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-vu6Pp0mGDWGvfD+f5a9aCBm2uxPdD92RWedTaSaWqPw='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-bD7C0A6KyWwre5KIFqPPYsHswXXkbBB4SvthuAYoRVs=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-H4BB5+7CePOSJHQhzaSpxU0lTy5e+waHB27MQcVpdxU='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
 <title>CrewHex screen</title>
 <style>/* CrewHex screen player — shared by the hosted player and the Pi kiosk build. */
 :root {
@@ -132,7 +132,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
 <div id="banner"></div>
 <div id="ident"><div></div></div>
 <div id="net" role="status"><span></span></div>
-<script>window.CHX_TRANSPORT='local';</script>
+<script>window.CHX_TRANSPORT='local';window.CHX_VERSION='2.0.8';</script>
 <script>/* CrewHex signage resolver — JS mirror of api/signage_resolver.py.
  * Same rules, same order. If you change one, change both and run:
  *   node web/public/player/resolver.test.cjs
@@ -255,7 +255,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.6';
+  var VERSION = window.CHX_VERSION || '2.0.8';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -617,7 +617,10 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
     b.style.background = '';
     b.style.color = '';
     b.innerHTML = '';
-    var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
+    // The tenant brand colour lives under branding in the manifest; display is a
+    // fallback for older servers. Reading the wrong one made every banner amber.
+    var pc = (S.manifest && S.manifest.branding && S.manifest.branding.primary_colour) ||
+             (S.manifest && S.manifest.display && S.manifest.display.primary_colour);
     var bg = tone === 'danger' ? '#d64545' : (pc ? safeColour(pc, '') : '#f2a93b');
     if (tone !== 'danger' && pc) b.style.background = bg;
     // WCAG luminance: choose whichever of black/white gives stronger contrast.

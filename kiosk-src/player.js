@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.6';
+  var VERSION = window.CHX_VERSION || '2.0.8';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };
@@ -379,7 +379,10 @@
     b.style.background = '';
     b.style.color = '';
     b.innerHTML = '';
-    var pc = S.manifest && S.manifest.display && S.manifest.display.primary_colour;
+    // The tenant brand colour lives under branding in the manifest; display is a
+    // fallback for older servers. Reading the wrong one made every banner amber.
+    var pc = (S.manifest && S.manifest.branding && S.manifest.branding.primary_colour) ||
+             (S.manifest && S.manifest.display && S.manifest.display.primary_colour);
     var bg = tone === 'danger' ? '#d64545' : (pc ? safeColour(pc, '') : '#f2a93b');
     if (tone !== 'danger' && pc) b.style.background = bg;
     // WCAG luminance: choose whichever of black/white gives stronger contrast.

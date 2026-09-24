@@ -6,6 +6,20 @@ sys.path.insert(0, str(ROOT / "client")); sys.path.insert(0, str(Path(__file__).
 from fake_server import Fake
 
 
+def _test_signing_key(tmp_path):
+    """Every test bundle is signed the way a release is, with a throwaway ed25519
+    key. Bundling client/ota_pubkey.pem made signatures mandatory, so unsigned
+    test bundles only proved that updates fail - CI went red on every run."""
+    import subprocess, shutil
+    key, pub = tmp_path / "ota.key", tmp_path / "ota.pub.pem"
+    if shutil.which("openssl"):
+        subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(key)], check=True,
+                       capture_output=True)
+        subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(pub)], check=True,
+                       capture_output=True)
+    return key, pub
+
+
 @pytest.fixture()
 def env(tmp_path):
     fake = Fake(public_dir=tmp_path / "public").start()
@@ -16,6 +30,11 @@ def env(tmp_path):
     os.environ["SCREEN_STATE"] = str(tmp_path / "state" / "device.json")
     sys.modules.pop("screen_client", None)
     sc = importlib.import_module("screen_client")
+    key, pub = _test_signing_key(tmp_path)
+    if pub.exists():
+        sc.PUBKEY_PATH = pub                    # signed bundles; unsigned are refused by design
+    elif hasattr(sc, "PUBKEY_PATH"):
+        sc.PUBKEY_PATH = tmp_path / "missing.pem"   # no openssl: the client warns and uses sha256 only
     yield sc, fake, tmp_path
     fake.stop()
 

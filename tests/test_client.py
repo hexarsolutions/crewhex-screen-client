@@ -1,4 +1,4 @@
-import hashlib, io, json, os, stat, subprocess, tarfile, time, shutil
+import hashlib, io, json, os, re, stat, subprocess, tarfile, time, shutil
 from pathlib import Path
 import pytest
 
@@ -156,7 +156,18 @@ def make_bundle(tmp, version, extra=None, bad_version=None):
         for name, data in (extra or {}).items():
             ti = tarfile.TarInfo(name); ti.size = len(data); t.addfile(ti, io.BytesIO(data))
     (tmp / "public" / (out.name + ".sha256")).write_text(hashlib.sha256(out.read_bytes()).hexdigest() + "  x\n")
+    _sign(out)                                   # releases are signed; tests must match
     return out
+
+
+def _sign(bundle, signed=True):
+    """Sign a test bundle with the same throwaway key conftest hands the client."""
+    import shutil
+    key = bundle.parent.parent / "ota.key"
+    if not signed or not key.exists() or not shutil.which("openssl"):
+        return
+    subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(bundle),
+                    "-out", str(bundle) + ".sig"], check=True)
 
 
 def url(sc, v): return "%s/public/screen-client-%s.tar.gz" % (sc.STATE.api_base, v)
@@ -195,6 +206,7 @@ def test_ota_signature_required_when_key_bundled(env, monkeypatch):
     subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(pub)], check=True)
     monkeypatch.setattr(sc, "PUBKEY_PATH", pub)
     b = make_bundle(tmp, "9.9.4")
+    Path(str(b) + ".sig").unlink(missing_ok=True)     # this bundle must be unsigned
     assert not sc.apply_update("9.9.4", url(sc, "9.9.4"), restart=False)           # unsigned -> refused
     subprocess.run(["openssl", "pkeyutl", "-sign", "-inkey", str(key), "-rawin", "-in", str(b),
                     "-out", str(b) + ".sig"], check=True)
@@ -221,3 +233,38 @@ def test_failed_build_is_not_reinstalled_in_a_loop(env):
     (sc.APP_DIR / "current.failed.json").write_text(json.dumps({"version": "9.9.1"}))
     assert not sc.apply_update("9.9.1", url(sc, "9.9.1"), restart=False)
     assert "previously failed" in sc.STATE.last_error
+
+
+# ---------------------------------------------------------------- supply chain
+def _installer():
+    return (Path(__file__).resolve().parent.parent / "install.sh").read_text()
+
+
+def test_installer_embeds_the_same_pubkey_as_the_client():
+    """The installer must verify bundles with the key the client trusts."""
+    import re
+    src = _installer()
+    pem = re.search(r"OTA_PUBKEY_PEM=\"\$\(cat <<'PEM'\n(.*?)\nPEM", src, re.S)
+    assert pem, "install.sh must embed the OTA public key"
+    shipped = (Path(__file__).resolve().parent.parent / "client" / "ota_pubkey.pem").read_text().strip()
+    assert pem.group(1).strip() == shipped
+
+
+def test_installer_refuses_instead_of_skipping_checks():
+    src = _installer()
+    assert "no checksum at" in src and "no signature at" in src
+    assert "signature check FAILED - refusing to install" in src
+    # the old silent-skip shape must be gone
+    assert not re.search(r"if curl -fsSL \"\$URL\.sha256\" -o", src)
+    # KIOSK_HOME is read after it is set (set -u aborts a fresh install otherwise)
+    assert src.index('KIOSK_HOME=$(getent passwd') < src.index('mkdir -p "$KIOSK_HOME/.config/crewhex-kiosk"')
+
+
+def test_player_version_matches_client_version():
+    root = Path(__file__).resolve().parent.parent
+    version = (root / "client" / "VERSION").read_text().strip()
+    player = (root / "kiosk-src" / "player.js").read_text()
+    assert "window.CHX_VERSION || '%s'" % version in player, "player.js version fallback has drifted"
+    built = (root / "client" / "kiosk" / "index.html").read_text()
+    assert "window.CHX_VERSION='%s'" % version in built, "kiosk build did not inject the version"
+
