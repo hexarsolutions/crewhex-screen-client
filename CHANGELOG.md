@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.0.7
+
+- Broadcast overlay fix: a text-only broadcast is a banner over the programme, and the
+  "has anything changed?" check now compares the *playing* resolution instead of the
+  overlay. Before, every live broadcast made the wall flick a slide each second no
+  matter what the playlist durations said. Slides now hold their schedule durations
+  (playlist items, page rotation_seconds) with the banner rolling on top.
+
+## 2.0.6
+
+- Stop restarting a slide on transient status blips: the local status poll no longer
+  bumps the generation on a single miss (two consecutive misses required). This was
+  the earlier 1s flicker.
+- waitChange keeps a hard 1s floor per slide and only cuts short on a real content
+  change (playing resolution or manifest etag).
+
+## 2.0.5
+
+- Banner wording enters from the right immediately and loops seamlessly (was parked
+  off-screen for most of the cycle, so only the NOTICE tag showed).
+- All rotation items play 15s.
+
+## 2.0.4
+
+- Banner text colour auto-contrasts against the banner background (black on light
+  brand colours, white on dark; black always on the red alert bar).
+
+## 2.0.3
+
+- Banner text enters from the right (was invisible until late in the loop); soft
+  cross-fade between items.
+
+
 ## 2.0.0
 
 **Protocol v2** (needs the CrewHex server signage release; falls back to v1 automatically).
