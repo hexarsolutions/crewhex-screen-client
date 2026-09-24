@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-qNay1Hv9levIJMDNWRAlgvVrE4GHbM72H3TLz2JYf98='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-jv3+sKbgK6/lziW7XWJoYPU1rls6R1LpmQ9fdpvJw6s=' 'sha256-Yg58o3NeQhCCBphj8wKEui2SQ7asYUvLUf7nFvGWVVE=' 'sha256-vu6Pp0mGDWGvfD+f5a9aCBm2uxPdD92RWedTaSaWqPw='; style-src 'unsafe-inline'; img-src 'self' https: data:; media-src 'self'; connect-src 'self'; frame-src https:; base-uri 'none'; form-action 'none'">
 <title>CrewHex screen</title>
 <style>/* CrewHex screen player — shared by the hosted player and the Pi kiosk build. */
 :root {
@@ -647,6 +647,15 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
     return r;
   }
   function keyOf(r) { return [r.mode, r.playlist_id || '', r.message || ''].join('|'); }
+  // The resolution the screen is actually PLAYING. A text-only broadcast is an
+  // overlay: it must never become the compare-key, or every waitChange tick
+  // sees a "changed" programme and the wall flicks slides every second.
+  function playingResolution() {
+    var r = resolution();
+    if (r.mode === 'override' && !r.playlist_id && r.message)
+      r = ChxResolver.resolve(S.manifest.display, S.manifest.schedules, [], new Date());
+    return r;
+  }
 
   function itemsFor(r) {
     var man = S.manifest, now = new Date();
@@ -673,13 +682,10 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
       var myGen = S.gen;
       if (repairing || (!LOCAL && !S.token) || (LOCAL && S.status.mode !== 'content')) { await sleep(1000); continue; }
       if (!S.manifest) { show(messageLayer({ title: 'Waiting for content', body: 'This screen is paired. Content appears once it is published.' }, 'info')); await waitChange(myGen, 5000); continue; }
-      var r = resolution();
-      var textOverride = r.mode === 'override' && !r.playlist_id && r.message ? { message: r.message, tone: r.tone } : null;
-      if (r.mode === 'override' && r.message) banner(r.message, r.tone);
+      var live = resolution();
+      if (live.mode === 'override' && live.message) banner(live.message, live.tone);
       else banner('', null);
-      // A text-only broadcast is an overlay, not a content replacement. Resolve
-      // the underlying schedule/default without the override so the programme keeps playing.
-      if (textOverride) r = ChxResolver.resolve(S.manifest.display, S.manifest.schedules, [], new Date());
+      var r = playingResolution();
       S.resKey = keyOf(r);
       var ahm = S.manifest.display.after_hours_mode || 'blank';
       if (r.mode === 'off' || (r.mode === 'after_hours' && ahm === 'blank')) {
@@ -717,7 +723,7 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
         // which showed up as a flicker every few seconds on the wall screens.
         var changed = false;
         try {
-          changed = (S.manifest && keyOf(resolution()) !== key) ||
+          changed = (S.manifest && keyOf(playingResolution()) !== key) ||
             (key === '' && S.manifest && S.manifest.etag !== et);
         } catch (e) { changed = true; }
         if ((changed || Date.now() - start >= ms) && Date.now() - start >= 1000) { clearInterval(t); done(); }

@@ -409,6 +409,15 @@
     return r;
   }
   function keyOf(r) { return [r.mode, r.playlist_id || '', r.message || ''].join('|'); }
+  // The resolution the screen is actually PLAYING. A text-only broadcast is an
+  // overlay: it must never become the compare-key, or every waitChange tick
+  // sees a "changed" programme and the wall flicks slides every second.
+  function playingResolution() {
+    var r = resolution();
+    if (r.mode === 'override' && !r.playlist_id && r.message)
+      r = ChxResolver.resolve(S.manifest.display, S.manifest.schedules, [], new Date());
+    return r;
+  }
 
   function itemsFor(r) {
     var man = S.manifest, now = new Date();
@@ -435,13 +444,10 @@
       var myGen = S.gen;
       if (repairing || (!LOCAL && !S.token) || (LOCAL && S.status.mode !== 'content')) { await sleep(1000); continue; }
       if (!S.manifest) { show(messageLayer({ title: 'Waiting for content', body: 'This screen is paired. Content appears once it is published.' }, 'info')); await waitChange(myGen, 5000); continue; }
-      var r = resolution();
-      var textOverride = r.mode === 'override' && !r.playlist_id && r.message ? { message: r.message, tone: r.tone } : null;
-      if (r.mode === 'override' && r.message) banner(r.message, r.tone);
+      var live = resolution();
+      if (live.mode === 'override' && live.message) banner(live.message, live.tone);
       else banner('', null);
-      // A text-only broadcast is an overlay, not a content replacement. Resolve
-      // the underlying schedule/default without the override so the programme keeps playing.
-      if (textOverride) r = ChxResolver.resolve(S.manifest.display, S.manifest.schedules, [], new Date());
+      var r = playingResolution();
       S.resKey = keyOf(r);
       var ahm = S.manifest.display.after_hours_mode || 'blank';
       if (r.mode === 'off' || (r.mode === 'after_hours' && ahm === 'blank')) {
@@ -479,7 +485,7 @@
         // which showed up as a flicker every few seconds on the wall screens.
         var changed = false;
         try {
-          changed = (S.manifest && keyOf(resolution()) !== key) ||
+          changed = (S.manifest && keyOf(playingResolution()) !== key) ||
             (key === '' && S.manifest && S.manifest.etag !== et);
         } catch (e) { changed = true; }
         if ((changed || Date.now() - start >= ms) && Date.now() - start >= 1000) { clearInterval(t); done(); }
