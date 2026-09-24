@@ -17,7 +17,7 @@
  */
 (function () {
   'use strict';
-  var VERSION = '2.0.2';
+  var VERSION = '2.0.3';
   var LOCAL = window.CHX_TRANSPORT === 'local';
   var CACHE = 'chx-media-v1';
   var K = { token: 'chx.player.token', tokenAt: 'chx.player.tokenAt', manifest: 'chx.player.manifest' };

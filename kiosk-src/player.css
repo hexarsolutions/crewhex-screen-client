@@ -93,6 +93,10 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
 .top .name { font-size: min(2.2cqw, 40px); font-weight: 700; }
 .top span:last-child { font-size: min(1.6cqw, 24px); color: #8b95a1; }
 
+/* soft cross-fade between items so switches don't flash */
+.layer { animation: chxfade .45s ease; }
+@keyframes chxfade { from { opacity: 0; } to { opacity: 1; } }
+
 /* overlays */
 /* broadcast banner — rolling across the top while content keeps playing */
 #banner { position: fixed; left: 0; right: 0; top: 0; height: 9.5vh; background: var(--amber); color: #1b1305;
@@ -100,11 +104,11 @@ html, body { width: 100%; height: 100%; background: #000; color: var(--paper); f
 #banner .btag { position: absolute; left: 0; top: 0; bottom: 0; width: 8.5vw; background: rgba(0,0,0,.25);
                 display: grid; place-items: center; font-size: 2.4vh; font-weight: 800; letter-spacing: .08em; color: #fff; z-index: 2; }
 #banner .broll { position: absolute; left: 0; top: 0; bottom: 0; right: 0; display: flex; align-items: center; }
-#banner .btrack { display: flex; align-items: center; white-space: nowrap; padding-left: 100vw;
-                  animation: chxbroll 16s linear infinite; }
+#banner .btrack { display: flex; align-items: center; white-space: nowrap; padding-left: 9.5vw;
+                  animation: chxbroll 14s linear infinite; }
 #banner .btrack span { font-size: 4vh; font-weight: 800; padding-right: 7vw; }
 #banner .btrack i { flex: none; width: 1.6vh; height: 1.6vh; border-radius: 50%; background: currentColor; opacity: .8; margin-right: 7vw; }
-@keyframes chxbroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes chxbroll { from { transform: translateX(100vw); } to { transform: translateX(-50%); } }
 #banner.danger { background: var(--red); color: #fff; }
 #ident { position: fixed; inset: 0; display: none; z-index: 30; place-items: center; background: rgba(0,0,0,.72); }
 #ident div { font-size: 9vh; font-weight: 800; padding: 3vh 5vw; border: .8vh solid var(--brand); border-radius: 2vh; }
