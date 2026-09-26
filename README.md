@@ -35,6 +35,13 @@ public API using the documented protocol in
    It heartbeats every minute so **Screens** shows it online, what it's
    playing, and its version.
 
+# Pi screen kit — shared boot layer
+
+One flashed card, both platforms: `boot/install.sh` gives a first-boot platform
+chooser (CrewHex or Hexar Display-Hub) plus WiFi join and a sticky kiosk; the
+Display-Hub path kiosks to `https://staff.hexar.co/display` and the CrewHex path
+runs this repo's hardened installer. Full story: `docs/BOOT.md`.
+
 ## Install (Raspberry Pi)
 
 ### For tenants — the easy way (no experience needed)
